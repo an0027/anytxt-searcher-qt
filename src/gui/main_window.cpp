@@ -12,6 +12,7 @@
 #include "dialogs/about_dialog.h"
 #include "dialogs/help_dialog.h"
 #include "dialogs/preferences_dialog.h"
+#include "core/notification_manager.h"
 #include "dialogs/watch_settings_dialog.h"
 #include "core/config.h"
 #include "core/xapian_database.h"
@@ -37,6 +38,8 @@
 #include <QCloseEvent>
 #include <QRegularExpression>
 #include <QSet>
+#include <QMenu>
+#include <QIcon>
 
 MainWindow::MainWindow(const QString& indexPath, QWidget* parent)
     : QMainWindow(parent)
@@ -65,6 +68,7 @@ MainWindow::MainWindow(const QString& indexPath, QWidget* parent)
     setupCentralWidget();
     setupStatusBar();
     setupConnections();
+    setupTrayIcon();
 
     // Load settings and initialize index
     loadSettings();
@@ -434,6 +438,10 @@ void MainWindow::performSearch()
                 m_searchStatusLabel->setText(tr("找到 %1 个结果").arg(result.second));
                 m_progressBar->setVisible(false);
                 m_cancelSearchBtn->setVisible(false);
+                // Notify (tray only, webhook only for large result sets)
+                if (m_notificationManager && result.second > 0) {
+                    m_notificationManager->notifySearchComplete(result.second, 0);
+                }
             }, Qt::QueuedConnection);
         } catch (const InvalidQueryError& e) {
             QMetaObject::invokeMethod(this, [this, e]() {
@@ -710,6 +718,11 @@ void MainWindow::onPreferences()
         m_pageSize = dialog.pageSize();
         m_searchBar->setScopeCombo(dialog.defaultScope());
 
+        // Apply webhook URL
+        if (m_notificationManager) {
+            m_notificationManager->setWebhookUrl(dialog.webhookUrl());
+        }
+
         // Apply index settings
         m_config->batchSize = dialog.batchSize();
         m_config->enableSpelling = dialog.enableSpelling();
@@ -772,11 +785,21 @@ void MainWindow::onFilesChanged(const QStringList& newFiles, const QStringList& 
     if (!m_indexQueue->isProcessing() && !deduped.isEmpty()) m_indexQueue->start();
 }
 
+
+
 void MainWindow::onQueueProgress(int indexed, int total, const QString& currentFile)
 {
     m_progressBar->setVisible(true);
     m_progressBar->setRange(0, total);
     m_progressBar->setValue(indexed);
+
+    // Track start time on first progress
+    if (m_lastIndexStartTime == 0)
+        m_lastIndexStartTime = QDateTime::currentSecsSinceEpoch();
+
+    // Progress notification via manager
+    if (m_notificationManager)
+        m_notificationManager->notifyIndexProgress(indexed, total, currentFile);
 }
 
 void MainWindow::onQueueFinished(int indexed, int failed)
@@ -785,12 +808,77 @@ void MainWindow::onQueueFinished(int indexed, int failed)
     if (indexed > 0 || failed > 0) {
         m_lastIndexTime = QDateTime::currentSecsSinceEpoch();
         updateIndexStatus();
+        // Notification
+        if (m_notificationManager) {
+            qint64 elapsed = m_lastIndexStartTime > 0
+                ? QDateTime::currentSecsSinceEpoch() - m_lastIndexStartTime
+                : 0;
+            m_notificationManager->notifyIndexComplete(indexed, failed, elapsed);
+        }
+    }
+    if (indexed > 0 && m_notificationManager) {
+        m_notificationManager->notifyFileWatchNewFiles(indexed);
     }
     if (m_database && m_database->isOpen()) m_database->refresh();
 }
 
+void MainWindow::setupTrayIcon()
+{
+    if (!QSystemTrayIcon::isSystemTrayAvailable()) return;
+
+    m_trayIcon = new QSystemTrayIcon(this);
+    m_trayIcon->setIcon(QApplication::windowIcon());
+    m_trayIcon->setToolTip(tr("AnyTXT Searcher"));
+
+    // Context menu
+    auto* trayMenu = new QMenu(this);
+    QAction* showAction = trayMenu->addAction(tr("显示主窗口"));
+    QAction* searchAction = trayMenu->addAction(tr("搜索..."));
+    trayMenu->addSeparator();
+    QAction* exitAction = trayMenu->addAction(tr("退出"));
+
+    connect(showAction, &QAction::triggered, this, [this]() {
+        showNormal();
+        activateWindow();
+        raise();
+    });
+    connect(searchAction, &QAction::triggered, this, [this]() {
+        showNormal();
+        activateWindow();
+        raise();
+        m_searchBar->focusSearch();
+    });
+    connect(exitAction, &QAction::triggered, qApp, &QApplication::quit);
+
+    m_trayIcon->setContextMenu(trayMenu);
+
+    // Double-click restores window
+    connect(m_trayIcon, &QSystemTrayIcon::activated, this, [this](QSystemTrayIcon::ActivationReason reason) {
+        if (reason == QSystemTrayIcon::DoubleClick || reason == QSystemTrayIcon::Trigger) {
+            showNormal();
+            activateWindow();
+            raise();
+        }
+    });
+
+    m_trayIcon->show();
+
+    // Initialize notification manager
+    m_notificationManager = new NotificationManager(m_trayIcon, this);
+}
+
 void MainWindow::closeEvent(QCloseEvent* event)
 {
-    saveSettings();
-    QMainWindow::closeEvent(event);
+    if (m_trayIcon && m_trayIcon->isVisible()) {
+        // Minimize to tray instead of closing
+        hide();
+        m_trayIcon->showMessage(
+            tr("AnyTXT Searcher"),
+            tr("程序已最小化到系统托盘，后台任务继续执行"),
+            QSystemTrayIcon::Information, 3000);
+        event->ignore();
+    } else {
+        saveSettings();
+        QMainWindow::closeEvent(event);
+    }
 }

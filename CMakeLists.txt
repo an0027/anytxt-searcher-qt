@@ -15,17 +15,28 @@ find_package(Qt6Core5Compat QUIET)
 
 if(Qt6_FOUND AND Qt6Core5Compat_FOUND)
     message(STATUS "✓ Using Qt6 (${Qt6_VERSION}) + Core5Compat")
+    find_package(Qt6Network QUIET)
     set(QT_LIBS Qt6::Widgets Qt6::Concurrent Qt6::Core5Compat)
+    if(Qt6Network_FOUND)
+        list(APPEND QT_LIBS Qt6::Network)
+        set(HAS_NETWORK TRUE)
+    endif()
 elseif(Qt6_FOUND)
     message(STATUS "✓ Using Qt6 (${Qt6_VERSION}) - Core5Compat not found")
+    find_package(Qt6Network QUIET)
     set(QT_LIBS Qt6::Widgets Qt6::Concurrent)
+    if(Qt6Network_FOUND)
+        list(APPEND QT_LIBS Qt6::Network)
+        set(HAS_NETWORK TRUE)
+    endif()
 else()
-    find_package(Qt5 QUIET COMPONENTS Widgets Concurrent)
+    find_package(Qt5 QUIET COMPONENTS Widgets Concurrent Network)
     if(NOT Qt5_FOUND)
         message(FATAL_ERROR "✗ Qt6/Qt5 not found")
     endif()
     message(STATUS "✓ Using Qt5 (${Qt5_VERSION})")
-    set(QT_LIBS Qt5::Widgets Qt5::Concurrent)
+    set(QT_LIBS Qt5::Widgets Qt5::Concurrent Qt5::Network)
+    set(HAS_NETWORK TRUE)
 endif()
 
 # ═══════════════════════════════════════════════════════════════
@@ -203,6 +214,7 @@ set(ANYTXT_SOURCES
     src/core/file_watcher.cpp
     src/core/index_queue.cpp
     src/core/rule_engine.cpp
+    src/core/notification_manager.cpp
 )
 
 if(HAS_POPPLER)

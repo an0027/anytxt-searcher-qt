@@ -16,6 +16,7 @@
 #include <QMenuBar>
 #include <QMutex>
 #include <QFutureWatcher>
+#include <QSystemTrayIcon>
 #include <QMap>
 #include <memory>
 #include "core/document.h"
@@ -27,6 +28,7 @@ class XapianSearcher;
 class ParserManager;
 class FileWatcher;
 class IndexQueue;
+class NotificationManager;
 class SearchBar;
 class ResultsWidget;
 class PreviewWidget;
@@ -73,6 +75,7 @@ private:
     void setupCentralWidget();
     void setupStatusBar();
     void setupConnections();
+    void setupTrayIcon();
     void loadSettings();
     void saveSettings();
     void initializeIndex();
@@ -120,7 +123,10 @@ private:
     QLabel* m_searchStatusLabel = nullptr;
     QPushButton* m_cancelSearchBtn = nullptr;
     QProgressBar* m_progressBar = nullptr;
+    QSystemTrayIcon* m_trayIcon = nullptr;
+    NotificationManager* m_notificationManager = nullptr;
     qint64 m_lastIndexTime = 0;
+    qint64 m_lastIndexStartTime = 0;
 };
 
 #endif

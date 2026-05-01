@@ -33,6 +33,7 @@ void PreferencesDialog::setupUI()
     m_tabWidget->addTab(createGeneralTab(), tr("常规"));
     m_tabWidget->addTab(createDisplayTab(), tr("显示"));
     m_tabWidget->addTab(createIndexTab(), tr("索引"));
+    m_tabWidget->addTab(createNotificationTab(), tr("通知"));
     layout->addWidget(m_tabWidget, 1);
 
     auto* btnBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
@@ -124,6 +125,30 @@ QWidget* PreferencesDialog::createIndexTab()
     return w;
 }
 
+QWidget* PreferencesDialog::createNotificationTab()
+{
+    auto* w = new QWidget(this);
+    auto* layout = new QVBoxLayout(w);
+
+    auto* webhookGroup = new QGroupBox(tr("机器人 Webhook"), w);
+    auto* webhookForm = new QFormLayout(webhookGroup);
+
+    auto* descLabel = new QLabel(
+        tr("配置 Webhook URL 后，索引完成/错误等事件将自动推送到你的聊天机器人。\n"
+           "支持飞书、企业微信等兼容 JSON POST 的 Webhook。"), w);
+    descLabel->setWordWrap(true);
+    descLabel->setStyleSheet("color: #666; font-size: 12px;");
+    webhookForm->addRow(descLabel);
+
+    m_webhookUrlEdit = new QLineEdit(w);
+    m_webhookUrlEdit->setPlaceholderText(tr("https://open.feishu.cn/open-apis/bot/v2/hook/xxx"));
+    webhookForm->addRow(tr("Webhook URL:"), m_webhookUrlEdit);
+
+    layout->addWidget(webhookGroup);
+    layout->addStretch();
+    return w;
+}
+
 void PreferencesDialog::loadCurrentSettings()
 {
     QSettings settings;
@@ -140,6 +165,8 @@ void PreferencesDialog::loadCurrentSettings()
         QString("background-color: %1; border: 1px solid #888; border-radius: 3px;")
             .arg(m_selectedColor.name()));
 
+    m_webhookUrlEdit->setText(settings.value("app/webhookUrl", "").toString());
+
     m_batchSizeSpin->setValue(settings.value("index/batchSize", 100).toInt());
     m_spellingCheck->setChecked(settings.value("index/enableSpelling", false).toBool());
 }
@@ -152,6 +179,7 @@ void PreferencesDialog::onApply()
     settings.setValue("search/autoLoadLastSearch", m_autoLoadCheck->isChecked());
     settings.setValue("app/darkTheme", m_darkThemeCheck->isChecked());
     settings.setValue("app/highlightColor", m_selectedColor.name());
+    settings.setValue("app/webhookUrl", m_webhookUrlEdit->text().trimmed());
     settings.setValue("index/batchSize", m_batchSizeSpin->value());
     settings.setValue("index/enableSpelling", m_spellingCheck->isChecked());
 
@@ -177,3 +205,4 @@ bool PreferencesDialog::darkTheme() const { return m_darkThemeCheck->isChecked()
 QColor PreferencesDialog::highlightColor() const { return m_selectedColor; }
 int PreferencesDialog::batchSize() const { return m_batchSizeSpin->value(); }
 bool PreferencesDialog::enableSpelling() const { return m_spellingCheck->isChecked(); }
+QString PreferencesDialog::webhookUrl() const { return m_webhookUrlEdit->text().trimmed(); }
