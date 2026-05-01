@@ -39,6 +39,7 @@ signals:
     void copyPath(const QString& path);
     void pageChanged(int page);
     void sortChanged(const QString& sortBy, bool reverse);
+    void excludeFile(const QString& filePath);
 
 private slots:
     void onItemSelectionChanged();

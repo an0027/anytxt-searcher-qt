@@ -1,6 +1,8 @@
 #include "gui/file_panel.h"
 #include "utils/file_utils.h"
 #include <QFileInfo>
+#include <QMenu>
+#include <QAction>
 #include <QDebug>
 
 FilePanel::FilePanel(QWidget* parent)
@@ -100,6 +102,19 @@ void FilePanel::setupUI()
 
     connect(m_list, &QListWidget::itemClicked, this, selectItem);
     connect(m_list, &QListWidget::itemActivated, this, selectItem);
+    m_list->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(m_list, &QListWidget::customContextMenuRequested, this, [this](const QPoint& pos) {
+        QListWidgetItem* item = m_list->itemAt(pos);
+        if (!item) return;
+        int idx = item->data(Qt::UserRole).toInt();
+        if (idx < 0 || idx >= m_documents.size()) return;
+
+        QMenu menu(this);
+        QAction* excludeAction = menu.addAction(tr("排除此文件"));
+        if (menu.exec(m_list->viewport()->mapToGlobal(pos)) == excludeAction) {
+            emit excludePath(m_documents[idx].filePath);
+        }
+    });
 
     connect(m_typeList, &QListWidget::itemChanged, this, &FilePanel::onTypeFilterChanged);
     connect(m_typeList, &QListWidget::itemClicked, this, [this](QListWidgetItem* item) {

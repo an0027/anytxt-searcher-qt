@@ -22,6 +22,7 @@
 #include "core/exceptions.h"
 #include "parser/parser_manager.h"
 #include "core/file_watcher.h"
+#include "utils/file_utils.h"
 #include "core/index_queue.h"
 
 #include <QAction>
@@ -105,6 +106,29 @@ void MainWindow::setupMenuBar()
     QAction* exitAction = fileMenu->addAction(tr("退出(&Q)"));
     exitAction->setShortcut(QKeySequence::Quit);
     connect(exitAction, &QAction::triggered, this, &QWidget::close);
+
+    // 编辑菜单
+    QMenu* editMenu = menuBar()->addMenu(tr("编辑(&E)"));
+    QAction* manageExcludeAction = editMenu->addAction(tr("管理排除项(&X)..."));
+    connect(manageExcludeAction, &QAction::triggered, this, [this]() {
+        if (m_excludedPaths.isEmpty()) {
+            QMessageBox::information(this, tr("排除项"), tr("当前没有排除的文件。"));
+            return;
+        }
+        QString msg = tr("已排除以下文件:\n\n");
+        QStringList items = m_excludedPaths.values();
+        for (int i = 0; i < qMin(items.size(), 20); ++i)
+            msg += QStringLiteral("  • %1\n").arg(items[i]);
+        if (items.size() > 20)
+            msg += tr("  ... 还有 %1 个\n\n").arg(items.size() - 20);
+        msg += tr("\n是否清除所有排除项？");
+        if (QMessageBox::question(this, tr("管理排除项"), msg) == QMessageBox::Yes) {
+            m_excludedPaths.clear();
+            saveSettings();
+            if (!m_currentQuery.isEmpty()) performSearch();
+            statusBar()->showMessage(tr("已清除所有排除项"), 3000);
+        }
+    });
 
     QMenu* toolsMenu = menuBar()->addMenu(tr("工具(&T)"));
     QAction* watchAction = toolsMenu->addAction(tr("智能索引设置(&W)..."));
@@ -278,6 +302,13 @@ void MainWindow::setupStatusBar()
 void MainWindow::setupConnections()
 {
     connect(m_searchBar, &SearchBar::search, this, &MainWindow::onSearch);
+    connect(m_filePanel, &FilePanel::excludePath, this, [this](const QString& path) {
+        m_excludedPaths.insert(path);
+        saveSettings();
+        if (!m_currentQuery.isEmpty()) performSearch();
+        statusBar()->showMessage(tr("已排除: %1").arg(QFileInfo(path).fileName()), 3000);
+    });
+
     connect(m_filterPanel, &FilterPanel::filtersChanged, this, [this](const QVariantMap& filters) {
         // Convert QVariantMap to QMap<QString,QString>
         m_currentFilters.clear();
@@ -308,6 +339,9 @@ void MainWindow::loadSettings()
     m_sidebarVisible = settings.value("app/sidebarVisible", true).toBool();
     m_currentPage = settings.value("search/page", 1).toInt();
     m_pageSize = settings.value("search/pageSize", 50).toInt();
+    m_excludedPaths = settings.value("app/excludedPaths", QStringList()).toStringList().toSet();
+    m_searchHistory = settings.value("search/history", QStringList()).toStringList();
+    m_searchBar->setHistory(m_searchHistory);
     QByteArray geometry = settings.value("app/geometry").toByteArray();
     if (!geometry.isEmpty()) restoreGeometry(geometry);
     QByteArray state = settings.value("app/windowState").toByteArray();
@@ -332,6 +366,8 @@ void MainWindow::saveSettings()
     settings.setValue("app/geometry", saveGeometry());
     settings.setValue("app/windowState", saveState());
     settings.setValue("index/path", m_config->dbPath);
+    settings.setValue("app/excludedPaths", QStringList(m_excludedPaths.begin(), m_excludedPaths.end()));
+    settings.setValue("search/history", m_searchHistory);
 }
 
 void MainWindow::initializeIndex()
@@ -380,6 +416,16 @@ void MainWindow::onSearch(const QString& query, const QVariantMap& options)
     else m_currentQuery = query;
     m_currentPage = 1;
     m_currentMatchType = options.value("matchType", "and").toString();
+
+    // Add to search history
+    if (!query.isEmpty()) {
+        m_searchHistory.removeAll(query);
+        m_searchHistory.prepend(query);
+        if (m_searchHistory.size() > 15)
+            m_searchHistory = m_searchHistory.mid(0, 15);
+        m_searchBar->setHistory(m_searchHistory);
+    }
+
     performSearch();
     QSettings settings;
     settings.setValue("search/lastQuery", query);
@@ -391,9 +437,11 @@ void MainWindow::performSearch()
     if (m_currentQuery.trimmed().isEmpty()) return;
     m_progressBar->setVisible(true);
     m_cancelSearchBtn->setVisible(true);
+    m_searchStartTime = QDateTime::currentMSecsSinceEpoch();
     m_searchStatusLabel->setText(tr("正在搜索..."));
 
     QString query = m_currentQuery;
+    QSet<QString> excluded = m_excludedPaths;
     QMap<QString, QString> filters = m_currentFilters;
     int offset = (m_currentPage - 1) * m_pageSize;
     int limit = m_pageSize;
@@ -401,13 +449,21 @@ void MainWindow::performSearch()
     bool sortReverse = m_currentSortReverse;
     QString matchType = m_currentMatchType;
 
-    QFuture<void> future = QtConcurrent::run([this, query, filters, offset, limit, sortBy, sortReverse, matchType]() {
+    QFuture<void> future = QtConcurrent::run([this, query, excluded, filters, offset, limit, sortBy, sortReverse, matchType]() {
         try {
             QPair<QVector<Document>, int> result;
             {
                 QMutexLocker locker(&m_searchMutex);
                 if (m_indexer) m_indexer->flush();
                 result = m_searcher->search(query, offset, limit, filters, sortBy, sortReverse, matchType);
+            }
+            // Filter excluded paths
+            if (!excluded.isEmpty() && !result.first.isEmpty()) {
+                result.first.erase(
+                    std::remove_if(result.first.begin(), result.first.end(),
+                        [&](const Document& d) { return excluded.contains(d.filePath); }),
+                    result.first.end());
+                result.second = qMin(result.second, result.first.size());
             }
             // Secondary filter: remove CJK bigram false positives
             if (!query.trimmed().isEmpty() && !result.first.isEmpty()) {
@@ -435,12 +491,16 @@ void MainWindow::performSearch()
                 QSet<int64_t> matchIds;
                 for (const auto& doc : result.first) matchIds.insert(doc.docId);
                 m_filePanel->setMatchIds(matchIds);
-                m_searchStatusLabel->setText(tr("找到 %1 个结果").arg(result.second));
+                qint64 elapsed = m_searchStartTime > 0
+                    ? QDateTime::currentMSecsSinceEpoch() - m_searchStartTime
+                    : 0;
+                m_searchStatusLabel->setText(
+                    tr("找到 %1 个结果 (用时 %2 毫秒)").arg(result.second).arg(elapsed));
                 m_progressBar->setVisible(false);
                 m_cancelSearchBtn->setVisible(false);
-                // Notify (tray only, webhook only for large result sets)
+                // Tray notification
                 if (m_notificationManager && result.second > 0) {
-                    m_notificationManager->notifySearchComplete(result.second, 0);
+                    m_notificationManager->notifySearchComplete(result.second);
                 }
             }, Qt::QueuedConnection);
         } catch (const InvalidQueryError& e) {
@@ -542,7 +602,69 @@ void MainWindow::onImportRequested()
 
 void MainWindow::onExportRequested()
 {
-    QMessageBox::information(this, tr("导出"), tr("导出功能开发中"));
+    // Collect all results for export
+    try {
+        QVector<Document> allDocs = m_searcher->getAllDocuments();
+        if (allDocs.isEmpty()) {
+            QMessageBox::information(this, tr("导出"), tr("没有可导出的数据。"));
+            return;
+        }
+
+        QString filePath = QFileDialog::getSaveFileName(this, tr("导出结果"),
+            QString(), tr("CSV 文件 (*.csv);;文本文件 (*.txt)"));
+        if (filePath.isEmpty()) return;
+
+        QFile file(filePath);
+        if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+            QMessageBox::critical(this, tr("导出失败"), tr("无法写入文件: %1").arg(file.errorString()));
+            return;
+        }
+
+        QTextStream out(&file);
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+        out.setCodec("UTF-8");
+#endif
+
+        if (filePath.endsWith(".csv", Qt::CaseInsensitive)) {
+            out << QStringLiteral("名称,路径,大小,修改时间,类型,相关性\r\n");
+            for (const auto& doc : allDocs) {
+                if (m_excludedPaths.contains(doc.filePath)) continue;
+                QString name = doc.fileName;
+                name.replace(QStringLiteral("\""), QStringLiteral("\"\""));
+                QString path = doc.filePath;
+                path.replace(QStringLiteral("\""), QStringLiteral("\"\""));
+                out << QStringLiteral("\"%1\",\"%2\",%3,%4,%5,%6\r\n")
+                    .arg(name, path)
+                    .arg(doc.fileSize)
+                    .arg(QDateTime::fromSecsSinceEpoch(doc.modifiedTime).toString("yyyy-MM-dd HH:mm"))
+                    .arg(doc.fileExt.toUpper())
+                    .arg(doc.percent);
+            }
+        } else {
+            out << tr("===== AnyTXT Searcher 搜索结果导出 =====\r\n\r\n");
+            int count = 0;
+            for (const auto& doc : allDocs) {
+                if (m_excludedPaths.contains(doc.filePath)) continue;
+                count++;
+                out << tr("[%1] %2\r\n").arg(count).arg(doc.fileName);
+                out << tr("  路径: %1\r\n").arg(doc.filePath);
+                out << tr("  大小: %1 | 修改: %2 | 类型: %3 | 相关性: %4%\r\n")
+                    .arg(FileUtils::formatFileSize(doc.fileSize))
+                    .arg(QDateTime::fromSecsSinceEpoch(doc.modifiedTime).toString("yyyy-MM-dd HH:mm"))
+                    .arg(doc.fileExt.toUpper())
+                    .arg(doc.percent);
+                if (!doc.content.isEmpty()) {
+                    out << tr("  预览: %1...\r\n\r\n")
+                        .arg(doc.content.left(200).simplified());
+                }
+            }
+        }
+
+        file.close();
+        statusBar()->showMessage(tr("导出完成: %1 条记录").arg(allDocs.size()), 5000);
+    } catch (const std::exception& e) {
+        QMessageBox::critical(this, tr("导出失败"), tr("%1").arg(e.what()));
+    }
 }
 
 void MainWindow::onReindex()

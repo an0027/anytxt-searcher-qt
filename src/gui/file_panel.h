@@ -30,6 +30,7 @@ public:
 
 signals:
     void fileSelected(const Document& doc);
+    void excludePath(const QString& filePath);
 
 private slots:
     void onSortChanged(int index);

@@ -16,6 +16,8 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QKeyEvent>
+#include <QCompleter>
+#include <QStringListModel>
 
 class SearchBar : public QWidget {
     Q_OBJECT
@@ -28,6 +30,7 @@ public:
     void setScopeCombo(const QString& scope);
     QString scope() const;
     void focusSearch();
+    void setHistory(const QStringList& history);
 
 signals:
     void search(const QString& query, const QVariantMap& options);
@@ -42,10 +45,14 @@ private slots:
 
 private:
     void setupUI();
+    void updateCompleter();
 
     QLineEdit* m_searchInput;
     QPushButton* m_searchButton;
     QComboBox* m_scopeCombo;
+    QCompleter* m_completer;
+    QStringListModel* m_historyModel;
+    QStringList m_history;
 };
 
 #endif // ANYTXT_SEARCH_BAR_H

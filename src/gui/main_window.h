@@ -115,6 +115,9 @@ private:
     int m_pageSize = 50;
     bool m_darkTheme = false;
     bool m_sidebarVisible = true;
+    QStringList m_searchHistory;
+    QSet<QString> m_excludedPaths;
+    qint64 m_searchStartTime = 0;
     QMutex m_searchMutex;
     QFutureWatcher<void>* m_searchWatcher = nullptr;
     QMap<QString, qint64> m_lastIndexedTimes;

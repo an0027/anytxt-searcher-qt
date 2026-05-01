@@ -8,6 +8,26 @@ SearchBar::SearchBar(QWidget* parent)
     setupUI();
 }
 
+void SearchBar::setHistory(const QStringList& history)
+{
+    m_history = history;
+    updateCompleter();
+}
+
+void SearchBar::updateCompleter()
+{
+    if (!m_completer) {
+        m_completer = new QCompleter(this);
+        m_historyModel = new QStringListModel(this);
+        m_completer->setModel(m_historyModel);
+        m_completer->setCaseSensitivity(Qt::CaseInsensitive);
+        m_completer->setMaxVisibleItems(10);
+        m_completer->setCompletionMode(QCompleter::PopupCompletion);
+        m_searchInput->setCompleter(m_completer);
+    }
+    m_historyModel->setStringList(m_history);
+}
+
 void SearchBar::setupUI()
 {
     auto* mainLayout = new QVBoxLayout(this);

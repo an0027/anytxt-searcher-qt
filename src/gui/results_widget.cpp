@@ -314,8 +314,7 @@ void ResultsWidget::onCustomContextMenu(const QPoint& pos)
     } else if (selected == copyNameAction) {
         QApplication::clipboard()->setText(doc.fileName);
     } else if (selected == excludeAction) {
-        // TODO: implement exclude logic
-        qDebug() << "Excluding:" << doc.filePath;
+        emit excludeFile(doc.filePath);
     }
 }
 
