@@ -718,11 +718,6 @@ void MainWindow::onPreferences()
         m_pageSize = dialog.pageSize();
         m_searchBar->setScopeCombo(dialog.defaultScope());
 
-        // Apply webhook URL
-        if (m_notificationManager) {
-            m_notificationManager->setWebhookUrl(dialog.webhookUrl());
-        }
-
         // Apply index settings
         m_config->batchSize = dialog.batchSize();
         m_config->enableSpelling = dialog.enableSpelling();

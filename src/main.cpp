@@ -28,8 +28,7 @@ int main(int argc, char* argv[])
     QApplication::setOrganizationName("AnyTXT");
     QApplication::setOrganizationDomain("anytxt.org");
     // Window icon loaded from app.rc resource
-    // Icon is loaded from app.rc resource for Windows native display
-    // QApplication::windowIcon() will return the icon set by .rc file
+
 
     QCommandLineParser parser;
     parser.setApplicationDescription("桌面全文搜索工具");

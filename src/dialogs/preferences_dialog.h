@@ -12,7 +12,6 @@
 #include <QCheckBox>
 #include <QPushButton>
 #include <QColor>
-#include <QLineEdit>
 #include <memory>
 
 class PreferencesDialog : public QDialog {
@@ -28,14 +27,12 @@ public:
     QColor highlightColor() const;
     int batchSize() const;
     bool enableSpelling() const;
-    QString webhookUrl() const;
 
 private slots:
     void onApply();
     void onPickColor();
 
 private:
-    QWidget* createNotificationTab();
     void setupUI();
     void loadCurrentSettings();
     QWidget* createGeneralTab();
@@ -53,9 +50,6 @@ private:
     QCheckBox* m_darkThemeCheck;
     QPushButton* m_colorBtn;
     QColor m_selectedColor;
-
-    // Notification
-    QLineEdit* m_webhookUrlEdit;
 
     // Index
     QSpinBox* m_batchSizeSpin;
