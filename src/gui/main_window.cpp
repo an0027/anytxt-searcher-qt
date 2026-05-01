@@ -306,17 +306,6 @@ void MainWindow::setupConnections()
     });
 
     connect(m_filePanel, &FilePanel::fileSelected, this, &MainWindow::onResultSelected);
-        // Convert QVariantMap to QMap<QString,QString>
-        m_currentFilters.clear();
-        for (auto it = filters.begin(); it != filters.end(); ++it) {
-            m_currentFilters[it.key()] = it.value().toString();
-        }
-        if (!m_currentQuery.isEmpty()) {
-            m_currentPage = 1;
-            performSearch();
-        }
-    });
-    connect(m_filePanel, &FilePanel::fileSelected, this, &MainWindow::onResultSelected);
     connect(m_previewWidget, &PreviewWidget::openFile, this, &MainWindow::onOpenFile);
     connect(m_previewWidget, &PreviewWidget::copyPath, this, &MainWindow::onCopyPath);
     connect(m_matchPanel, &MatchPanel::paragraphClicked, this, [this](int paraIdx) {
