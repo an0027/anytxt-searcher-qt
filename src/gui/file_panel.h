@@ -1,18 +1,13 @@
-/*
- * file_panel.h - 文件列表面板 (Windows 资源管理器风格)
- */
-
 #ifndef ANYTXT_FILE_PANEL_H
 #define ANYTXT_FILE_PANEL_H
 
 #include <QWidget>
-#include <QTreeWidget>
+#include <QListWidget>
 #include <QComboBox>
 #include <QLabel>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QPushButton>
-#include <QHeaderView>
 #include <memory>
 #include "core/document.h"
 
@@ -31,24 +26,22 @@ signals:
     void excludePath(const QString& filePath);
 
 private slots:
-    void onTypeFilterChanged(int index);
-    void onHeaderClicked(int logicalIndex);
+    void onSortChanged(int index);
 
 private:
     void setupUI();
     void applySort();
-    QTreeWidgetItem* createFileRow(const Document& doc, int idx);
-    int currentSortColumn() const;
 
     QLabel* m_countLabel;
-    QComboBox* m_typeCombo;
-    QTreeWidget* m_tree;
+    QComboBox* m_sortCombo;
+    QPushButton* m_sortOrderBtn;
+    QListWidget* m_list;
 
     QVector<Document> m_documents;
     QSet<int64_t> m_matchIds;
     bool m_hasActiveSearch = false;
-    int m_sortColumn = 0; // 0=name, 1=date, 2=size, 3=type
-    Qt::SortOrder m_sortOrder = Qt::AscendingOrder;
+    int m_sortMode = 1; // 0=name, 1=relevance, 2=date, 3=size
+    bool m_sortReverse = false;
 };
 
-#endif // ANYTXT_FILE_PANEL_H
+#endif
