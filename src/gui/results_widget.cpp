@@ -15,6 +15,10 @@
 #include <QDesktopServices>
 #include <QUrl>
 #include <QFileInfo>
+#include <QDrag>
+#include <QMimeData>
+#include <QMouseEvent>
+#include <QPixmap>
 #include <QDebug>
 
 
@@ -22,6 +26,59 @@ ResultsWidget::ResultsWidget(QWidget* parent)
     : QWidget(parent)
 {
     setupUI();
+}
+
+// ── Drag support: enable dragging files from results ──
+void ResultsWidget::mouseMoveEvent(QMouseEvent* event)
+{
+    if (!(event->buttons() & Qt::LeftButton))
+        return QWidget::mouseMoveEvent(event);
+
+    if (!m_dragStartPos.isValid())
+        m_dragStartPos = event->pos();
+
+    if ((event->pos() - m_dragStartPos).manhattanLength() < 10)
+        return QWidget::mouseMoveEvent(event);
+
+    QTreeWidgetItem* item = m_tree->itemAt(m_dragStartPos);
+    if (!item) return;
+
+    int row = m_tree->indexOfTopLevelItem(item);
+    if (row < 0 || row >= m_documents.size()) return;
+
+    const Document& doc = m_documents[row];
+    QFileInfo fi(doc.filePath);
+    if (!fi.exists()) return;
+
+    QDrag* drag = new QDrag(this);
+    QMimeData* mimeData = new QMimeData();
+    QList<QUrl> urls;
+    urls.append(QUrl::fromLocalFile(doc.filePath));
+    mimeData->setUrls(urls);
+    mimeData->setText(doc.filePath);
+    drag->setMimeData(mimeData);
+
+    // Try to set a pixmap of the filename
+    QPixmap pix(m_tree->visualItemRect(item).size());
+    m_tree->viewport()->render(&pix, QPoint(), QRegion(m_tree->visualItemRect(item)));
+    drag->setPixmap(pix);
+
+    m_dragStartPos = QPoint();
+    drag->exec(Qt::CopyAction);
+}
+
+void ResultsWidget::mousePressEvent(QMouseEvent* event)
+{
+    if (event->button() == Qt::LeftButton)
+        m_dragStartPos = event->pos();
+    QWidget::mousePressEvent(event);
+}
+
+void ResultsWidget::mouseReleaseEvent(QMouseEvent* event)
+{
+    if (event->button() == Qt::LeftButton)
+        m_dragStartPos = QPoint();
+    QWidget::mouseReleaseEvent(event);
 }
 
 void ResultsWidget::setupUI()

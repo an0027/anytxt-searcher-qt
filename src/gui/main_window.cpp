@@ -10,6 +10,7 @@
 #include "dialogs/export_dialog.h"
 #include "dialogs/about_dialog.h"
 #include "dialogs/help_dialog.h"
+#include "dialogs/preferences_dialog.h"
 #include "dialogs/watch_settings_dialog.h"
 #include "core/config.h"
 #include "core/xapian_database.h"
@@ -111,7 +112,11 @@ void MainWindow::setupMenuBar()
 
     QMenu* viewMenu = menuBar()->addMenu(tr("视图(&V)"));
     QAction* themeAction = viewMenu->addAction(tr("切换主题(&T)"));
+    themeAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_T));
     connect(themeAction, &QAction::triggered, this, &MainWindow::onToggleTheme);
+    QAction* focusSearchAction = viewMenu->addAction(tr("聚焦搜索框(&S)"));
+    focusSearchAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_F));
+    connect(focusSearchAction, &QAction::triggered, this, [this]() { m_searchBar->focusSearch(); });
 
     QMenu* helpMenu = menuBar()->addMenu(tr("帮助(&H)"));
     QAction* helpAction = helpMenu->addAction(tr("使用手册(&U)"));
@@ -197,8 +202,27 @@ void MainWindow::setupStatusBar()
     m_progressBar->setMaximumWidth(150);
     m_progressBar->setMaximumHeight(16);
     m_progressBar->setVisible(false);
+
+    m_cancelSearchBtn = new QPushButton(tr("取消"), this);
+    m_cancelSearchBtn->setFixedSize(50, 22);
+    m_cancelSearchBtn->setVisible(false);
+    m_cancelSearchBtn->setStyleSheet(
+        "QPushButton { background-color: #d32f2f; color: white; border: none; "
+        "border-radius: 3px; font-size: 11px; font-weight: bold; }"
+        "QPushButton:hover { background-color: #b71c1c; }");
+    connect(m_cancelSearchBtn, &QPushButton::clicked, this, [this]() {
+        if (m_searchWatcher && m_searchWatcher->isRunning()) {
+            m_searchWatcher->cancel();
+            m_searchWatcher->waitForFinished();
+            m_searchStatusLabel->setText(tr("搜索已取消"));
+            m_cancelSearchBtn->setVisible(false);
+            m_progressBar->setVisible(false);
+        }
+    });
+
     statusBar()->addPermanentWidget(m_indexStatusLabel);
     statusBar()->addPermanentWidget(m_searchStatusLabel);
+    statusBar()->addWidget(m_cancelSearchBtn);
     statusBar()->addPermanentWidget(m_progressBar);
 }
 
@@ -234,7 +258,7 @@ void MainWindow::loadSettings()
         m_searchBar->setQuery(lastQuery);
         m_searchBar->setScopeCombo(lastScope);
     }
-    if (m_darkTheme) onToggleTheme();
+    if (m_darkTheme) applyTheme();
 }
 
 void MainWindow::saveSettings()
@@ -305,6 +329,7 @@ void MainWindow::performSearch()
 {
     if (m_currentQuery.trimmed().isEmpty()) return;
     m_progressBar->setVisible(true);
+    m_cancelSearchBtn->setVisible(true);
     m_searchStatusLabel->setText(tr("正在搜索..."));
 
     QString query = m_currentQuery;
@@ -351,17 +376,20 @@ void MainWindow::performSearch()
                 m_filePanel->setMatchIds(matchIds);
                 m_searchStatusLabel->setText(tr("找到 %1 个结果").arg(result.second));
                 m_progressBar->setVisible(false);
+                m_cancelSearchBtn->setVisible(false);
             }, Qt::QueuedConnection);
         } catch (const InvalidQueryError& e) {
             QMetaObject::invokeMethod(this, [this, e]() {
                 QMessageBox::warning(const_cast<MainWindow*>(this), tr("查询错误"), tr("%1").arg(e.what()));
                 m_searchStatusLabel->setText(tr("查询错误"));
                 m_progressBar->setVisible(false);
+                m_cancelSearchBtn->setVisible(false);
             }, Qt::QueuedConnection);
         } catch (const std::exception& e) {
             QMetaObject::invokeMethod(this, [this, e]() {
                 m_searchStatusLabel->setText(tr("搜索失败"));
                 m_progressBar->setVisible(false);
+                m_cancelSearchBtn->setVisible(false);
                 qWarning() << "Search error:" << e.what();
             }, Qt::QueuedConnection);
         }
@@ -371,6 +399,7 @@ void MainWindow::performSearch()
 
 void MainWindow::onSearchFinished()
 {
+    m_cancelSearchBtn->setVisible(false);
     m_searchWatcher->setFuture(QFuture<void>());
 }
 
@@ -474,19 +503,105 @@ void MainWindow::onOptimize()
     }
 }
 
-void MainWindow::onToggleTheme()
+void MainWindow::applyTheme()
 {
-    m_darkTheme = !m_darkTheme;
     if (m_darkTheme) {
         setStyleSheet(
-            "QMainWindow { background-color: #1e1e1e; color: #d4d4d4; }"
-            "QWidget { background-color: #1e1e1e; color: #d4d4d4; }"
-            "QMenuBar { background-color: #2d2d2d; color: #d4d4d4; }"
-            "QToolBar { background-color: #2d2d2d; border: none; }"
-            "QStatusBar { background-color: #007acc; color: white; }");
+            /* Main window */
+            "QMainWindow, QWidget { background-color: #1e1e1e; color: #d4d4d4; }"
+            "QMainWindow::separator { background-color: #3c3c3c; width: 1px; height: 1px; }"
+
+            /* Menu */
+            "QMenuBar { background-color: #2d2d2d; color: #d4d4d4; border-bottom: 1px solid #3c3c3c; }"
+            "QMenuBar::item:selected { background-color: #094771; }"
+            "QMenu { background-color: #2d2d2d; color: #d4d4d4; border: 1px solid #3c3c3c; }"
+            "QMenu::item:selected { background-color: #094771; }"
+            "QMenu::separator { height: 1px; background: #3c3c3c; margin: 4px 8px; }"
+
+            /* Toolbar */
+            "QToolBar { background-color: #2d2d2d; border: none; border-bottom: 1px solid #3c3c3c; spacing: 4px; padding: 2px; }"
+            "QToolBar QToolButton { color: #d4d4d4; border: none; padding: 4px 8px; border-radius: 3px; }"
+            "QToolBar QToolButton:hover { background-color: #3c3c3c; }"
+            "QToolBar QToolButton:pressed { background-color: #094771; }"
+
+            /* Status bar */
+            "QStatusBar { background-color: #007acc; color: white; font-size: 12px; }"
+            "QStatusBar QLabel { color: white; }"
+
+            /* Splitter */
+            "QSplitter::handle { background-color: #3c3c3c; }"
+
+            /* Labels */
+            "QLabel { color: #d4d4d4; background: transparent; }"
+
+            /* Combo boxes */
+            "QComboBox { background-color: #3c3c3c; color: #d4d4d4; border: 1px solid #555; border-radius: 4px; padding: 4px 8px; }"
+            "QComboBox::drop-down { border: none; width: 20px; }"
+            "QComboBox QAbstractItemView { background-color: #3c3c3c; color: #d4d4d4; selection-background-color: #094771; }"
+
+            /* Line edits */
+            "QLineEdit { background-color: #3c3c3c; color: #d4d4d4; border: 1px solid #555; border-radius: 4px; padding: 4px 8px; }"
+            "QLineEdit:focus { border-color: #1976D2; }"
+
+            /* Buttons */
+            "QPushButton { background-color: #3c3c3c; color: #d4d4d4; border: 1px solid #555; border-radius: 4px; padding: 6px 16px; }"
+            "QPushButton:hover { background-color: #4c4c4c; }"
+            "QPushButton:pressed { background-color: #094771; }"
+            "QPushButton:disabled { color: #666; background-color: #2d2d2d; }"
+
+            /* Tree widget (results) */
+            "QTreeWidget { background-color: #1e1e1e; color: #d4d4d4; border: 1px solid #3c3c3c; alternate-background-color: #252525; }"
+            "QTreeWidget::item:selected { background-color: #094771; }"
+            "QTreeWidget::item:hover { background-color: #2a2d2e; }"
+            "QHeaderView::section { background-color: #2d2d2d; color: #d4d4d4; border: 1px solid #3c3c3c; padding: 4px; }"
+
+            /* List widget (file panel, match panel) */
+            "QListWidget { background-color: #1e1e1e; color: #d4d4d4; border: 1px solid #3c3c3c; }"
+            "QListWidget::item:selected { background-color: #094771; }"
+            "QListWidget::item:hover { background-color: #2a2d2e; }"
+
+            /* Text edit (preview) */
+            "QTextEdit { background-color: #1e1e1e; color: #d4d4d4; border: 1px solid #3c3c3c; }"
+            "QTextEdit QScrollBar:vertical { background: #2d2d2d; width: 10px; }"
+            "QTextEdit QScrollBar::handle:vertical { background: #555; border-radius: 4px; min-height: 20px; }"
+            "QTextEdit QScrollBar::add-line:vertical, QTextEdit QScrollBar::sub-line:vertical { height: 0; }"
+            "QTextEdit QScrollBar:horizontal { background: #2d2d2d; height: 10px; }"
+            "QTextEdit QScrollBar::handle:horizontal { background: #555; border-radius: 4px; min-width: 20px; }"
+            "QTextEdit QScrollBar::add-line:horizontal, QTextEdit QScrollBar::sub-line:horizontal { width: 0; }"
+
+            /* Tab widget */
+            "QTabWidget::pane { background-color: #1e1e1e; border: 1px solid #3c3c3c; }"
+            "QTabBar::tab { background-color: #2d2d2d; color: #d4d4d4; padding: 6px 16px; border: 1px solid #3c3c3c; border-bottom: none; border-top-left-radius: 4px; border-top-right-radius: 4px; }"
+            "QTabBar::tab:selected { background-color: #1e1e1e; border-bottom: 1px solid #1e1e1e; }"
+            "QTabBar::tab:hover { background-color: #3c3c3c; }"
+
+            /* Progress bar */
+            "QProgressBar { background-color: #2d2d2d; border: 1px solid #555; border-radius: 3px; text-align: center; color: #d4d4d4; }"
+            "QProgressBar::chunk { background-color: #1976D2; border-radius: 2px; }"
+
+            /* Check box & Radio */
+            "QCheckBox { color: #d4d4d4; spacing: 4px; }"
+            "QCheckBox::indicator { width: 14px; height: 14px; }"
+            "QRadioButton { color: #d4d4d4; spacing: 4px; }"
+
+            /* Group box */
+            "QGroupBox { color: #d4d4d4; border: 1px solid #3c3c3c; border-radius: 4px; margin-top: 8px; padding-top: 12px; }"
+            "QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 4px; }"
+
+            /* Spin box */
+            "QSpinBox { background-color: #3c3c3c; color: #d4d4d4; border: 1px solid #555; border-radius: 4px; padding: 2px 4px; }"
+        );
     } else {
         setStyleSheet("");
     }
+}
+
+void MainWindow::onToggleTheme()
+{
+    m_darkTheme = !m_darkTheme;
+    applyTheme();
+    QSettings settings;
+    settings.setValue("app/darkTheme", m_darkTheme);
 }
 
 void MainWindow::onToggleSidebar()
@@ -522,7 +637,30 @@ void MainWindow::onAbout()
 
 void MainWindow::onPreferences()
 {
-    QMessageBox::information(this, tr("偏好设置"), tr("偏好设置功能开发中"));
+    PreferencesDialog dialog(this);
+    if (dialog.exec() == QDialog::Accepted) {
+        // Apply display settings
+        bool newDarkTheme = dialog.darkTheme();
+        if (newDarkTheme != m_darkTheme) {
+            m_darkTheme = newDarkTheme;
+            applyTheme();
+        }
+
+        // Apply search settings
+        m_pageSize = dialog.pageSize();
+        m_searchBar->setScopeCombo(dialog.defaultScope());
+
+        // Apply index settings
+        m_config->batchSize = dialog.batchSize();
+        m_config->enableSpelling = dialog.enableSpelling();
+        if (m_indexer) {
+            m_indexer->setBatchSize(m_config->batchSize);
+            m_indexer->setEnableSpelling(m_config->enableSpelling);
+        }
+        m_config->save();
+
+        statusBar()->showMessage(tr("设置已应用"), 3000);
+    }
 }
 
 void MainWindow::onSortChanged(const QString& sortBy, bool reverse)

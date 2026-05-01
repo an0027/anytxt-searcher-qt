@@ -79,6 +79,7 @@ private:
     void refreshFileList();
     void buildMatchPanel(const Document& doc);
     void updateIndexStatus();
+    void applyTheme();
 
     SearchBar* m_searchBar = nullptr;
     FilePanel* m_filePanel = nullptr;
@@ -114,6 +115,7 @@ private:
 
     QLabel* m_indexStatusLabel = nullptr;
     QLabel* m_searchStatusLabel = nullptr;
+    QPushButton* m_cancelSearchBtn = nullptr;
     QProgressBar* m_progressBar = nullptr;
     qint64 m_lastIndexTime = 0;
 };

@@ -198,6 +198,7 @@ set(ANYTXT_SOURCES
     src/dialogs/export_dialog.cpp
     src/dialogs/about_dialog.cpp
     src/dialogs/help_dialog.cpp
+    src/dialogs/preferences_dialog.cpp
     src/dialogs/watch_settings_dialog.cpp
     src/core/file_watcher.cpp
     src/core/index_queue.cpp

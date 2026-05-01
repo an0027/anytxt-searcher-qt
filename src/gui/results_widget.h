@@ -17,6 +17,8 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QPoint>
+#include <QMouseEvent>
 
 class ResultsWidget : public QWidget {
     Q_OBJECT
@@ -50,6 +52,12 @@ private:
     void setupUI();
     void updatePagination();
     QTreeWidgetItem* createItem(const Document& doc, int row);
+
+    // Drag support
+    void mouseMoveEvent(QMouseEvent* event) override;
+    void mousePressEvent(QMouseEvent* event) override;
+    void mouseReleaseEvent(QMouseEvent* event) override;
+    QPoint m_dragStartPos;
 
     QTreeWidget* m_tree;
     QLabel* m_resultsCountLabel;
