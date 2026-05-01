@@ -1,20 +1,18 @@
 /*
- * file_panel.h - 文件列表面板（左侧）
-
-功能说明：显示索引目录中的文件列表，支持按文件名/时间/相关性排序。
-点击文件触发预览。
+ * file_panel.h - 文件列表面板 (Windows 资源管理器风格)
  */
 
 #ifndef ANYTXT_FILE_PANEL_H
 #define ANYTXT_FILE_PANEL_H
 
 #include <QWidget>
-#include <QListWidget>
+#include <QTreeWidget>
 #include <QComboBox>
 #include <QLabel>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QPushButton>
+#include <QHeaderView>
 #include <memory>
 #include "core/document.h"
 
@@ -33,23 +31,24 @@ signals:
     void excludePath(const QString& filePath);
 
 private slots:
-    void onSortChanged(int index);
-    void onTypeFilterChanged();
+    void onTypeFilterChanged(int index);
+    void onHeaderClicked(int logicalIndex);
 
 private:
     void setupUI();
     void applySort();
-    int sortValue(const Document& doc, int mode) const;
+    QTreeWidgetItem* createFileRow(const Document& doc, int idx);
+    int currentSortColumn() const;
 
-    QListWidget* m_list;
     QLabel* m_countLabel;
-    QListWidget* m_typeList;
-    QComboBox* m_sortCombo;
-    QPushButton* m_sortOrderBtn;
+    QComboBox* m_typeCombo;
+    QTreeWidget* m_tree;
+
     QVector<Document> m_documents;
     QSet<int64_t> m_matchIds;
     bool m_hasActiveSearch = false;
-    bool m_sortReverse = false;
+    int m_sortColumn = 0; // 0=name, 1=date, 2=size, 3=type
+    Qt::SortOrder m_sortOrder = Qt::AscendingOrder;
 };
 
 #endif // ANYTXT_FILE_PANEL_H
