@@ -94,121 +94,54 @@ MainWindow::~MainWindow()
 // ==================== Menu ====================
 void MainWindow::setupMenuBar()
 {
-    QMenu* fileMenu = menuBar()->addMenu(tr("文件(&F)"));
-    QAction* newIndexAction = fileMenu->addAction(tr("新建索引(&N)"));
-    newIndexAction->setShortcut(QKeySequence::New);
-    QAction* importAction = fileMenu->addAction(tr("导入文档(&I)..."));
-    importAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_I));
-    QAction* exportAction = fileMenu->addAction(tr("导出结果(&E)..."));
-    exportAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_E));
-    fileMenu->addSeparator();
-    QAction* exitAction = fileMenu->addAction(tr("退出(&Q)"));
-    exitAction->setShortcut(QKeySequence::Quit);
-    connect(exitAction, &QAction::triggered, this, &QWidget::close);
-
-    // 编辑菜单
-    QMenu* editMenu = menuBar()->addMenu(tr("编辑(&E)"));
-    QAction* manageExcludeAction = editMenu->addAction(tr("管理排除项(&X)..."));
-    connect(manageExcludeAction, &QAction::triggered, this, [this]() {
-        if (m_excludedPaths.isEmpty()) {
-            QMessageBox::information(this, tr("排除项"), tr("当前没有排除的文件。"));
-            return;
-        }
-        QString msg = tr("已排除以下文件:\n\n");
-        QStringList items = m_excludedPaths.values();
-        for (int i = 0; i < qMin(items.size(), 20); ++i)
-            msg += QStringLiteral("  • %1\n").arg(items[i]);
-        if (items.size() > 20)
-            msg += tr("  ... 还有 %1 个\n\n").arg(items.size() - 20);
-        msg += tr("\n是否清除所有排除项？");
-        if (QMessageBox::question(this, tr("管理排除项"), msg) == QMessageBox::Yes) {
-            m_excludedPaths.clear();
-            saveSettings();
-            if (!m_currentQuery.isEmpty()) performSearch();
-            statusBar()->showMessage(tr("已清除所有排除项"), 3000);
-        }
-    });
-
-    QMenu* toolsMenu = menuBar()->addMenu(tr("工具(&T)"));
-    QAction* watchAction = toolsMenu->addAction(tr("智能索引设置(&W)..."));
-    connect(watchAction, &QAction::triggered, this, &MainWindow::onWatchSettings);
-    toolsMenu->addSeparator();
-    QAction* reindexAction = toolsMenu->addAction(tr("重建索引(&R)..."));
-    connect(reindexAction, &QAction::triggered, this, &MainWindow::onReindex);
-    QAction* optimizeAction = toolsMenu->addAction(tr("优化索引(&O)"));
-    connect(optimizeAction, &QAction::triggered, this, &MainWindow::onOptimize);
-
-    QMenu* viewMenu = menuBar()->addMenu(tr("视图(&V)"));
-
-    QAction* sidebarAction = viewMenu->addAction(tr("侧边栏(&S)"));
-    sidebarAction->setCheckable(true);
-    sidebarAction->setChecked(m_sidebarVisible);
-    sidebarAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_ParenLeft));
-    connect(sidebarAction, &QAction::toggled, this, &MainWindow::onToggleSidebar);
-
-    QAction* statusBarAction = viewMenu->addAction(tr("状态栏(&B)"));
-    statusBarAction->setCheckable(true);
-    statusBarAction->setChecked(true);
-    connect(statusBarAction, &QAction::toggled, this, [this](bool visible) {
-        statusBar()->setVisible(visible);
-    });
-
-    viewMenu->addSeparator();
-
-    QAction* fullscreenAction = viewMenu->addAction(tr("全屏(&F)"));
-    fullscreenAction->setShortcut(QKeySequence(Qt::Key_F11));
-    connect(fullscreenAction, &QAction::triggered, this, [this]() {
-        if (isFullScreen())
-            showNormal();
-        else
-            showFullScreen();
-    });
-
-    QAction* resetLayoutAction = viewMenu->addAction(tr("重置布局(&R)"));
-    connect(resetLayoutAction, &QAction::triggered, this, [this]() {
-        m_hSplitter->setSizes({250, 800});
-        statusBar()->showMessage(tr("布局已重置"), 3000);
-    });
-
-    viewMenu->addSeparator();
-
-    QAction* themeAction = viewMenu->addAction(tr("切换主题(&T)"));
-    themeAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_T));
-    connect(themeAction, &QAction::triggered, this, &MainWindow::onToggleTheme);
-
-    QAction* focusSearchAction = viewMenu->addAction(tr("聚焦搜索框(&C)"));
-    focusSearchAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_F));
-    connect(focusSearchAction, &QAction::triggered, this, [this]() { m_searchBar->focusSearch(); });
-
-    QMenu* helpMenu = menuBar()->addMenu(tr("帮助(&H)"));
-    QAction* helpAction = helpMenu->addAction(tr("使用手册(&U)"));
-    helpAction->setShortcut(QKeySequence(Qt::Key_F1));
-    helpMenu->addSeparator();
-    QAction* aboutAction = helpMenu->addAction(tr("关于(&A)"));
-    connect(helpAction, &QAction::triggered, this, &MainWindow::onHelp);
-    connect(aboutAction, &QAction::triggered, this, &MainWindow::onAbout);
-
-    connect(newIndexAction, &QAction::triggered, this, [this]() {
-        QString path = QFileDialog::getExistingDirectory(this, tr("选择索引目录"), m_config->dbPath);
-        if (!path.isEmpty()) {
-            m_config->dbPath = path;
-            m_config->save();
-            initializeIndex();
-            refreshFileList();
-        }
-    });
-    connect(importAction, &QAction::triggered, this, &MainWindow::onImportRequested);
-    connect(exportAction, &QAction::triggered, this, &MainWindow::onExportRequested);
+    // Disabled - all functions on toolbar
 }
 
 void MainWindow::setupToolBar()
 {
     m_toolbar = addToolBar(tr("工具栏"));
     m_toolbar->setMovable(false);
-    QAction* refreshAction = m_toolbar->addAction(tr("刷新"));
+
+    auto addBtn = [this](const QString& text) { return m_toolbar->addAction(text); };
+
+    QAction* importAction = addBtn(tr("导入文档"));
+    connect(importAction, &QAction::triggered, this, &MainWindow::onImportRequested);
+
+    QAction* exportAction = addBtn(tr("导出结果"));
+    connect(exportAction, &QAction::triggered, this, &MainWindow::onExportRequested);
+
+    m_toolbar->addSeparator();
+
+    QAction* reindexAction = addBtn(tr("重建索引"));
+    connect(reindexAction, &QAction::triggered, this, &MainWindow::onReindex);
+
+    QAction* optimizeAction = addBtn(tr("优化索引"));
+    connect(optimizeAction, &QAction::triggered, this, &MainWindow::onOptimize);
+
+    m_toolbar->addSeparator();
+
+    QAction* watchAction = addBtn(tr("索引设置"));
+    connect(watchAction, &QAction::triggered, this, &MainWindow::onWatchSettings);
+
+    QAction* themeAction = addBtn(tr("切换主题"));
+    connect(themeAction, &QAction::triggered, this, &MainWindow::onToggleTheme);
+
+    QAction* refreshAction = addBtn(tr("刷新"));
     connect(refreshAction, &QAction::triggered, this, [this]() {
         if (!m_currentQuery.isEmpty()) performSearch();
     });
+
+    m_toolbar->addSeparator();
+
+    QAction* aboutAction = addBtn(tr("关于"));
+    connect(aboutAction, &QAction::triggered, this, &MainWindow::onAbout);
+
+    // Enlarge buttons
+    m_toolbar->setIconSize(QSize(24, 24));
+    m_toolbar->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    m_toolbar->setStyleSheet(
+        "QToolBar { spacing: 4px; padding: 2px; }"
+        "QToolButton { padding: 8px 14px; font-size: 13px; min-height: 34px; }");
 }
 
 void MainWindow::setupCentralWidget()
