@@ -9,6 +9,7 @@
 #include "dialogs/import_dialog.h"
 #include "dialogs/export_dialog.h"
 #include "dialogs/about_dialog.h"
+#include "dialogs/help_dialog.h"
 #include "dialogs/watch_settings_dialog.h"
 #include "core/config.h"
 #include "core/xapian_database.h"
@@ -113,7 +114,11 @@ void MainWindow::setupMenuBar()
     connect(themeAction, &QAction::triggered, this, &MainWindow::onToggleTheme);
 
     QMenu* helpMenu = menuBar()->addMenu(tr("帮助(&H)"));
+    QAction* helpAction = helpMenu->addAction(tr("使用手册(&U)"));
+    helpAction->setShortcut(QKeySequence(Qt::Key_F1));
+    helpMenu->addSeparator();
     QAction* aboutAction = helpMenu->addAction(tr("关于(&A)"));
+    connect(helpAction, &QAction::triggered, this, &MainWindow::onHelp);
     connect(aboutAction, &QAction::triggered, this, &MainWindow::onAbout);
 
     connect(newIndexAction, &QAction::triggered, this, [this]() {
@@ -501,6 +506,12 @@ void MainWindow::onAddWatchFolder()
             if (!m_indexQueue->isProcessing()) m_indexQueue->start();
         }
     }
+}
+
+void MainWindow::onHelp()
+{
+    HelpDialog dialog(this);
+    dialog.exec();
 }
 
 void MainWindow::onAbout()

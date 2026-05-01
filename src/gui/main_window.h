@@ -56,6 +56,7 @@ private slots:
     void onOptimize();
     void onToggleTheme();
     void onToggleSidebar();
+    void onHelp();
     void onAbout();
     void onPreferences();
     void onSortChanged(const QString& sortBy, bool reverse);
