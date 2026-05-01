@@ -14,17 +14,13 @@ void MatchPanel::setupUI()
     layout->setSpacing(2);
 
     m_label = new QLabel(tr("命中段落"), this);
-    m_label->setStyleSheet(
-        "font-weight: bold; color: #d4d4d4; padding: 6px 8px; "
-        "background-color: #2d2d2d; border-bottom: 1px solid #555;");
+    m_label->setStyleSheet("font-weight: bold; padding: 6px 8px;");
 
     m_list = new QListWidget(this);
     m_list->setStyleSheet(
-        "QListWidget { background-color: #1e1e1e; color: #d4d4d4; "
-        "border: none; font-size: 12px; }"
-        "QListWidget::item { padding: 8px; border-bottom: 1px solid #333; }"
-        "QListWidget::item:selected { background-color: #094771; }"
-        "QListWidget::item:hover { background-color: #2a2d2e; }");
+        "QListWidget { border: 1px solid #b0b0b0; border-top: 2px solid #c0c0c0; "
+        "border-left: 2px solid #c0c0c0; font-size: 12px; }"
+        "QListWidget::item { padding: 6px 8px; border-bottom: 1px solid #e0e0e0; }");
     m_list->setWordWrap(true);
     m_list->setSpacing(1);
 
