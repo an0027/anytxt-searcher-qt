@@ -11,13 +11,9 @@ set(CMAKE_AUTOUIC ON)
 # Qt 版本探测
 # ═══════════════════════════════════════════════════════════════
 find_package(Qt6 QUIET COMPONENTS Widgets Concurrent)
-find_package(Qt6Core5Compat QUIET)
 
-if(Qt6_FOUND AND Qt6Core5Compat_FOUND)
-    message(STATUS "✓ Using Qt6 (${Qt6_VERSION}) + Core5Compat")
-    set(QT_LIBS Qt6::Widgets Qt6::Concurrent Qt6::Core5Compat)
-elseif(Qt6_FOUND)
-    message(STATUS "✓ Using Qt6 (${Qt6_VERSION}) - Core5Compat not found")
+if(Qt6_FOUND)
+    message(STATUS "✓ Using Qt6 (${Qt6_VERSION})")
     set(QT_LIBS Qt6::Widgets Qt6::Concurrent)
 else()
     find_package(Qt5 QUIET COMPONENTS Widgets Concurrent)
