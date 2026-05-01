@@ -63,8 +63,8 @@ MainWindow::MainWindow(const QString& indexPath, QWidget* parent)
     m_indexQueue = std::make_shared<IndexQueue>(m_database, m_indexer, m_processorManager, this);
 
     // Setup UI
-    setupMenuBar();
     setupToolBar();
+    // Menu bar disabled - all on toolbar
     setupCentralWidget();
     setupStatusBar();
     setupConnections();
