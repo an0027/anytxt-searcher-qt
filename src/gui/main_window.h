@@ -9,6 +9,7 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QPushButton>
 #include <QProgressBar>
 #include <QStatusBar>
 #include <QSettings>
@@ -16,6 +17,8 @@
 #include <QMenuBar>
 #include <QMutex>
 #include <QFutureWatcher>
+#include <QMenu>
+#include <QAction>
 #include <QSystemTrayIcon>
 #include <QSet>
 #include "core/notification_manager.h"

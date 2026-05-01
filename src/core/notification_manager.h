@@ -11,7 +11,6 @@
 #include <QSystemTrayIcon>
 
 class NotificationManager : public QObject {
-    Q_OBJECT
 public:
     explicit NotificationManager(QSystemTrayIcon* trayIcon, QObject* parent = nullptr);
     ~NotificationManager() override = default;
