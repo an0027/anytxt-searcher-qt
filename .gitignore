@@ -16,3 +16,7 @@ Thumbs.db
 
 # Toolchain files
 toolchain-*.cmake
+
+deps/
+
+platforms/
