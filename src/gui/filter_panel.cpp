@@ -114,9 +114,8 @@ void FilterPanel::setupUI()
 
     mainLayout->addStretch();
 
-    // Set a fixed width for the panel
-    setMinimumWidth(180);
-    setMaximumWidth(220);
+    // Let the splitter control width
+    setMinimumWidth(160);
 
     // Connect signals
     auto connectCheckbox = [this](QCheckBox* cb) {

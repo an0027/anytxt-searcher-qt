@@ -5,6 +5,7 @@
 #include "gui/results_widget.h"
 #include "gui/preview_widget.h"
 #include "gui/file_panel.h"
+#include "gui/filter_panel.h"
 #include "gui/match_panel.h"
 #include "dialogs/import_dialog.h"
 #include "dialogs/export_dialog.h"
@@ -111,10 +112,44 @@ void MainWindow::setupMenuBar()
     connect(optimizeAction, &QAction::triggered, this, &MainWindow::onOptimize);
 
     QMenu* viewMenu = menuBar()->addMenu(tr("视图(&V)"));
+
+    QAction* sidebarAction = viewMenu->addAction(tr("侧边栏(&S)"));
+    sidebarAction->setCheckable(true);
+    sidebarAction->setChecked(m_sidebarVisible);
+    sidebarAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_ParenLeft));
+    connect(sidebarAction, &QAction::toggled, this, &MainWindow::onToggleSidebar);
+
+    QAction* statusBarAction = viewMenu->addAction(tr("状态栏(&B)"));
+    statusBarAction->setCheckable(true);
+    statusBarAction->setChecked(true);
+    connect(statusBarAction, &QAction::toggled, this, [this](bool visible) {
+        statusBar()->setVisible(visible);
+    });
+
+    viewMenu->addSeparator();
+
+    QAction* fullscreenAction = viewMenu->addAction(tr("全屏(&F)"));
+    fullscreenAction->setShortcut(QKeySequence(Qt::Key_F11));
+    connect(fullscreenAction, &QAction::triggered, this, [this]() {
+        if (isFullScreen())
+            showNormal();
+        else
+            showFullScreen();
+    });
+
+    QAction* resetLayoutAction = viewMenu->addAction(tr("重置布局(&R)"));
+    connect(resetLayoutAction, &QAction::triggered, this, [this]() {
+        m_hSplitter->setSizes({250, 800});
+        statusBar()->showMessage(tr("布局已重置"), 3000);
+    });
+
+    viewMenu->addSeparator();
+
     QAction* themeAction = viewMenu->addAction(tr("切换主题(&T)"));
     themeAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_T));
     connect(themeAction, &QAction::triggered, this, &MainWindow::onToggleTheme);
-    QAction* focusSearchAction = viewMenu->addAction(tr("聚焦搜索框(&S)"));
+
+    QAction* focusSearchAction = viewMenu->addAction(tr("聚焦搜索框(&C)"));
     focusSearchAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_F));
     connect(focusSearchAction, &QAction::triggered, this, [this]() { m_searchBar->focusSearch(); });
 
@@ -162,9 +197,19 @@ void MainWindow::setupCentralWidget()
     m_hSplitter = new QSplitter(Qt::Horizontal, this);
     m_hSplitter->setHandleWidth(1);
 
+    // Left panel: filter + file list in vertical splitter
+    m_leftPanel = new QWidget(this);
+    auto* leftLayout = new QVBoxLayout(m_leftPanel);
+    leftLayout->setContentsMargins(0, 0, 0, 0);
+    leftLayout->setSpacing(0);
+
+    m_filterPanel = new FilterPanel(this);
+    leftLayout->addWidget(m_filterPanel);
+
     m_filePanel = new FilePanel(this);
-    m_filePanel->setMinimumWidth(200);
-    m_hSplitter->addWidget(m_filePanel);
+    leftLayout->addWidget(m_filePanel, 1);
+
+    m_hSplitter->addWidget(m_leftPanel);
 
     m_rightPanel = new QWidget(this);
     auto* rightLayout = new QVBoxLayout(m_rightPanel);
@@ -229,6 +274,17 @@ void MainWindow::setupStatusBar()
 void MainWindow::setupConnections()
 {
     connect(m_searchBar, &SearchBar::search, this, &MainWindow::onSearch);
+    connect(m_filterPanel, &FilterPanel::filtersChanged, this, [this](const QVariantMap& filters) {
+        // Convert QVariantMap to QMap<QString,QString>
+        m_currentFilters.clear();
+        for (auto it = filters.begin(); it != filters.end(); ++it) {
+            m_currentFilters[it.key()] = it.value().toString();
+        }
+        if (!m_currentQuery.isEmpty()) {
+            m_currentPage = 1;
+            performSearch();
+        }
+    });
     connect(m_filePanel, &FilePanel::fileSelected, this, &MainWindow::onResultSelected);
     connect(m_previewWidget, &PreviewWidget::openFile, this, &MainWindow::onOpenFile);
     connect(m_previewWidget, &PreviewWidget::copyPath, this, &MainWindow::onCopyPath);
@@ -258,6 +314,7 @@ void MainWindow::loadSettings()
         m_searchBar->setQuery(lastQuery);
         m_searchBar->setScopeCombo(lastScope);
     }
+    if (!m_sidebarVisible) m_leftPanel->setVisible(false);
     if (m_darkTheme) applyTheme();
 }
 
@@ -607,6 +664,9 @@ void MainWindow::onToggleTheme()
 void MainWindow::onToggleSidebar()
 {
     m_sidebarVisible = !m_sidebarVisible;
+    m_leftPanel->setVisible(m_sidebarVisible);
+    QSettings settings;
+    settings.setValue("app/sidebarVisible", m_sidebarVisible);
 }
 
 void MainWindow::onAddWatchFolder()
