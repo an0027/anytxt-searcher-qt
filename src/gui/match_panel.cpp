@@ -18,9 +18,10 @@ void MatchPanel::setupUI()
 
     m_list = new QListWidget(this);
     m_list->setStyleSheet(
-        "QListWidget { border: 1px solid #b0b0b0; border-top: 2px solid #c0c0c0; "
-        "border-left: 2px solid #c0c0c0; font-size: 12px; }"
-        "QListWidget::item { padding: 6px 8px; border-bottom: 1px solid #e0e0e0; }");
+        "QListWidget { background: transparent; border: none; font-size: 12px; }"
+        "QListWidget::item { padding: 8px; border-bottom: 1px solid #e0e0e0; }"
+        "QListWidget::item:selected { background-color: #E8F0FE; }"
+        "QListWidget::item:hover { background-color: #f0f0f0; }");
     m_list->setWordWrap(true);
     m_list->setSpacing(1);
 
