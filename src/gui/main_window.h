@@ -22,6 +22,7 @@
 #include <QSystemTrayIcon>
 #include <QSet>
 #include "core/notification_manager.h"
+#include "core/theme_config.h"
 #include <QMap>
 #include <memory>
 #include "core/document.h"
@@ -116,7 +117,8 @@ private:
     bool m_currentSortReverse = false;
     int m_currentPage = 1;
     int m_pageSize = 50;
-    int m_themeMode = 0; // 0=绯荤粺榛樿, 1=鏆楄壊, 2=VS Code浜壊
+    QString m_currentThemeKey = "dark";
+    ThemeManager* m_themeManager = nullptr;
     bool m_sidebarVisible = true;
     QStringList m_searchHistory;
     QSet<QString> m_excludedPaths;

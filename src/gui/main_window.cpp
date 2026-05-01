@@ -45,6 +45,13 @@ MainWindow::MainWindow(const QString& indexPath, QWidget* parent)
     : QMainWindow(parent)
     , m_searchWatcher(new QFutureWatcher<void>(this))
 {
+    // Initialize theme manager
+    m_themeManager = new ThemeManager(this);
+    m_themeManager->initialize();
+    connect(m_themeManager, &ThemeManager::themeChanged, this, [this](const QString& name) {
+        m_currentThemeKey = name;
+    });
+
     setWindowTitle(tr("AnyTXT Searcher - 全文搜索工具"));
     resize(1200, 800);
     setMinimumSize(800, 600);
@@ -253,7 +260,7 @@ void MainWindow::setupConnections()
 void MainWindow::loadSettings()
 {
     QSettings settings;
-    m_themeMode = settings.value("app/themeMode", 0).toInt();
+    m_currentThemeKey = settings.value("app/theme", "dark").toString();
     m_sidebarVisible = settings.value("app/sidebarVisible", true).toBool();
     m_currentPage = settings.value("search/page", 1).toInt();
     m_pageSize = settings.value("search/pageSize", 50).toInt();
@@ -272,13 +279,16 @@ void MainWindow::loadSettings()
         m_searchBar->setScopeCombo(lastScope);
     }
     if (!m_sidebarVisible) m_leftPanel->setVisible(false);
-    if (m_themeMode != 0) applyTheme();
+    // Apply the saved theme (ThemeManager already applied default in init)
+    if (m_themeManager && m_currentThemeKey != m_themeManager->currentThemeName()) {
+        m_themeManager->setTheme(m_currentThemeKey);
+    }
 }
 
 void MainWindow::saveSettings()
 {
     QSettings settings;
-    settings.setValue("app/themeMode", m_themeMode);
+    settings.setValue("app/theme", m_currentThemeKey);
     settings.setValue("app/sidebarVisible", m_sidebarVisible);
     settings.setValue("search/page", m_currentPage);
     settings.setValue("search/pageSize", m_pageSize);
@@ -611,161 +621,35 @@ void MainWindow::onOptimize()
 
 void MainWindow::applyTheme()
 {
-    if (m_themeMode == 1) {
-        // ── 暗色主题 ──
-        setStyleSheet(
-            "QMainWindow, QWidget { background-color: #1e1e1e; color: #d4d4d4; }"
-            "QMainWindow::separator { background-color: #3c3c3c; width: 1px; height: 1px; }"
-
-            "QMenuBar { background-color: #2d2d2d; color: #d4d4d4; border-bottom: 1px solid #3c3c3c; }"
-            "QMenuBar::item:selected { background-color: #094771; }"
-            "QMenu { background-color: #2d2d2d; color: #d4d4d4; border: 1px solid #3c3c3c; }"
-            "QMenu::item:selected { background-color: #094771; }"
-            "QMenu::separator { height: 1px; background: #3c3c3c; margin: 4px 8px; }"
-
-            "QToolBar { background-color: #2d2d2d; border: none; border-bottom: 1px solid #3c3c3c; spacing: 4px; padding: 2px; }"
-            "QToolBar QToolButton { color: #d4d4d4; border: none; padding: 4px 8px; border-radius: 3px; }"
-            "QToolBar QToolButton:hover { background-color: #3c3c3c; }"
-            "QToolBar QToolButton:pressed { background-color: #094771; }"
-
-            "QStatusBar { background-color: #007acc; color: white; font-size: 12px; }"
-            "QStatusBar QLabel { color: white; }"
-
-            "QSplitter::handle { background-color: #3c3c3c; }"
-
-            "QLabel { color: #d4d4d4; background: transparent; }"
-
-            "QComboBox { background-color: #3c3c3c; color: #d4d4d4; border: 1px solid #555; border-radius: 4px; padding: 4px 8px; }"
-            "QComboBox::drop-down { border: none; width: 20px; }"
-            "QComboBox QAbstractItemView { background-color: #3c3c3c; color: #d4d4d4; selection-background-color: #094771; }"
-
-            "QLineEdit { background-color: #3c3c3c; color: #d4d4d4; border: 1px solid #555; border-radius: 4px; padding: 4px 8px; }"
-            "QLineEdit:focus { border-color: #1976D2; }"
-
-            "QPushButton { background-color: #3c3c3c; color: #d4d4d4; border: 1px solid #555; border-radius: 4px; padding: 6px 16px; }"
-            "QPushButton:hover { background-color: #4c4c4c; }"
-            "QPushButton:pressed { background-color: #094771; }"
-            "QPushButton:disabled { color: #666; background-color: #2d2d2d; }"
-
-            "QTreeWidget { background-color: #1e1e1e; color: #d4d4d4; border: 1px solid #3c3c3c; alternate-background-color: #252525; }"
-            "QTreeWidget::item:selected { background-color: #094771; }"
-            "QTreeWidget::item:hover { background-color: #2a2d2e; }"
-            "QHeaderView::section { background-color: #2d2d2d; color: #d4d4d4; border: 1px solid #3c3c3c; padding: 4px; }"
-
-            "QListWidget { background-color: #1e1e1e; color: #d4d4d4; border: 1px solid #3c3c3c; }"
-            "QListWidget::item:selected { background-color: #094771; }"
-            "QListWidget::item:hover { background-color: #2a2d2e; }"
-
-            "QTextEdit { background-color: #1e1e1e; color: #d4d4d4; border: 1px solid #3c3c3c; }"
-            "QTextEdit QScrollBar:vertical { background: #2d2d2d; width: 10px; }"
-            "QTextEdit QScrollBar::handle:vertical { background: #555; border-radius: 4px; min-height: 20px; }"
-            "QTextEdit QScrollBar::add-line:vertical, QTextEdit QScrollBar::sub-line:vertical { height: 0; }"
-            "QTextEdit QScrollBar:horizontal { background: #2d2d2d; height: 10px; }"
-            "QTextEdit QScrollBar::handle:horizontal { background: #555; border-radius: 4px; min-width: 20px; }"
-            "QTextEdit QScrollBar::add-line:horizontal, QTextEdit QScrollBar::sub-line:horizontal { width: 0; }"
-
-            "QTabWidget::pane { background-color: #1e1e1e; border: 1px solid #3c3c3c; }"
-            "QTabBar::tab { background-color: #2d2d2d; color: #d4d4d4; padding: 6px 16px; border: 1px solid #3c3c3c; border-bottom: none; border-top-left-radius: 4px; border-top-right-radius: 4px; }"
-            "QTabBar::tab:selected { background-color: #1e1e1e; border-bottom: 1px solid #1e1e1e; }"
-            "QTabBar::tab:hover { background-color: #3c3c3c; }"
-
-            "QProgressBar { background-color: #2d2d2d; border: 1px solid #555; border-radius: 3px; text-align: center; color: #d4d4d4; }"
-            "QProgressBar::chunk { background-color: #1976D2; border-radius: 2px; }"
-
-            "QCheckBox { color: #d4d4d4; spacing: 4px; }"
-            "QCheckBox::indicator { width: 14px; height: 14px; }"
-            "QRadioButton { color: #d4d4d4; spacing: 4px; }"
-
-            "QGroupBox { color: #d4d4d4; border: 1px solid #3c3c3c; border-radius: 4px; margin-top: 8px; padding-top: 12px; }"
-            "QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 4px; }"
-
-            "QSpinBox { background-color: #3c3c3c; color: #d4d4d4; border: 1px solid #555; border-radius: 4px; padding: 2px 4px; }"
-        );
-    } else if (m_themeMode == 2) {
-        // ── VS Code 风格亮色主题 ──
-        setStyleSheet(
-            "QMainWindow, QWidget { background-color: #ffffff; color: #1f1f1f; }"
-            "QMainWindow::separator { background-color: #e0e0e0; width: 1px; height: 1px; }"
-
-            "QMenuBar { background-color: #f3f3f3; color: #1f1f1f; border-bottom: 1px solid #e0e0e0; }"
-            "QMenuBar::item:selected { background-color: #e8f0fe; color: #0066b8; }"
-            "QMenu { background-color: #ffffff; color: #1f1f1f; border: 1px solid #d0d0d0; }"
-            "QMenu::item:selected { background-color: #e8f0fe; color: #0066b8; }"
-            "QMenu::separator { height: 1px; background: #e0e0e0; margin: 4px 8px; }"
-
-            "QToolBar { background-color: #f3f3f3; border: none; border-bottom: 1px solid #e0e0e0; spacing: 4px; padding: 2px; }"
-            "QToolBar QToolButton { color: #1f1f1f; border: none; padding: 4px 8px; border-radius: 3px; }"
-            "QToolBar QToolButton:hover { background-color: #e0e0e0; }"
-            "QToolBar QToolButton:pressed { background-color: #cce5ff; }"
-
-            "QStatusBar { background-color: #0066b8; color: white; font-size: 12px; }"
-            "QStatusBar QLabel { color: white; }"
-
-            "QSplitter::handle { background-color: #e0e0e0; }"
-
-            "QLabel { color: #1f1f1f; background: transparent; }"
-
-            "QComboBox { background-color: #ffffff; color: #1f1f1f; border: 1px solid #c0c0c0; border-radius: 4px; padding: 4px 8px; }"
-            "QComboBox::drop-down { border: none; width: 20px; }"
-            "QComboBox QAbstractItemView { background-color: #ffffff; color: #1f1f1f; selection-background-color: #e8f0fe; selection-color: #0066b8; }"
-
-            "QLineEdit { background-color: #ffffff; color: #1f1f1f; border: 1px solid #c0c0c0; border-radius: 4px; padding: 4px 8px; }"
-            "QLineEdit:focus { border-color: #0066b8; }"
-
-            "QPushButton { background-color: #ffffff; color: #1f1f1f; border: 1px solid #c0c0c0; border-radius: 4px; padding: 6px 16px; }"
-            "QPushButton:hover { background-color: #e8f0fe; border-color: #0066b8; color: #0066b8; }"
-            "QPushButton:pressed { background-color: #cce5ff; }"
-            "QPushButton:disabled { color: #aaa; background-color: #f5f5f5; border-color: #e0e0e0; }"
-
-            "QTreeWidget { background-color: #ffffff; color: #1f1f1f; border: 1px solid #e0e0e0; alternate-background-color: #f8f8f8; }"
-            "QTreeWidget::item:selected { background-color: #e8f0fe; color: #1f1f1f; }"
-            "QTreeWidget::item:hover { background-color: #f0f0f0; }"
-            "QHeaderView::section { background-color: #f3f3f3; color: #1f1f1f; border: 1px solid #e0e0e0; padding: 4px; font-weight: 500; }"
-
-            "QListWidget { background-color: #ffffff; color: #1f1f1f; border: 1px solid #e0e0e0; }"
-            "QListWidget::item:selected { background-color: #e8f0fe; color: #1f1f1f; }"
-            "QListWidget::item:hover { background-color: #f0f0f0; }"
-
-            "QTextEdit { background-color: #ffffff; color: #1f1f1f; border: 1px solid #e0e0e0; }"
-            "QTextEdit QScrollBar:vertical { background: #f3f3f3; width: 10px; }"
-            "QTextEdit QScrollBar::handle:vertical { background: #c0c0c0; border-radius: 4px; min-height: 20px; }"
-            "QTextEdit QScrollBar::add-line:vertical, QTextEdit QScrollBar::sub-line:vertical { height: 0; }"
-            "QTextEdit QScrollBar:horizontal { background: #f3f3f3; height: 10px; }"
-            "QTextEdit QScrollBar::handle:horizontal { background: #c0c0c0; border-radius: 4px; min-width: 20px; }"
-            "QTextEdit QScrollBar::add-line:horizontal, QTextEdit QScrollBar::sub-line:horizontal { width: 0; }"
-
-            "QTabWidget::pane { background-color: #ffffff; border: 1px solid #e0e0e0; }"
-            "QTabBar::tab { background-color: #ececec; color: #1f1f1f; padding: 6px 16px; border: 1px solid #e0e0e0; border-bottom: none; border-top-left-radius: 4px; border-top-right-radius: 4px; }"
-            "QTabBar::tab:selected { background-color: #ffffff; border-bottom: 1px solid #ffffff; color: #0066b8; }"
-            "QTabBar::tab:hover { background-color: #e8f0fe; }"
-
-            "QProgressBar { background-color: #f3f3f3; border: 1px solid #e0e0e0; border-radius: 3px; text-align: center; color: #1f1f1f; }"
-            "QProgressBar::chunk { background-color: #0066b8; border-radius: 2px; }"
-
-            "QCheckBox { color: #1f1f1f; spacing: 4px; }"
-            "QCheckBox::indicator { width: 14px; height: 14px; }"
-            "QRadioButton { color: #1f1f1f; spacing: 4px; }"
-
-            "QGroupBox { color: #1f1f1f; border: 1px solid #e0e0e0; border-radius: 4px; margin-top: 8px; padding-top: 12px; }"
-            "QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 4px; }"
-
-            "QSpinBox { background-color: #ffffff; color: #1f1f1f; border: 1px solid #c0c0c0; border-radius: 4px; padding: 2px 4px; }"
-        );
-    } else {
-        // ── 系统默认（无样式）──
-        setStyleSheet("");
+    if (m_themeManager) {
+        m_themeManager->applyTheme();
     }
 }
 
 void MainWindow::onToggleTheme()
 {
-    // 循环: 系统默认(0) → 暗色(1) → VS Code亮色(2) → 系统默认(0)
-    m_themeMode = (m_themeMode + 1) % 3;
-    applyTheme();
-    QSettings settings;
-    settings.setValue("app/themeMode", m_themeMode);
-    QStringList names = {tr("系统默认"), tr("暗色主题"), tr("VS Code 亮色")};
-    statusBar()->showMessage(tr("主题: %1").arg(names[m_themeMode]), 3000);
+    if (!m_themeManager) return;
+    // Cycle through available themes
+    QStringList themes = m_themeManager->availableThemes();
+    if (themes.isEmpty()) return;
+    int idx = themes.indexOf(m_currentThemeKey);
+    if (idx < 0 || idx >= themes.size() - 1) idx = 0;
+    else idx++;
+    QString newTheme = themes[idx];
+    if (m_themeManager->setTheme(newTheme)) {
+        m_currentThemeKey = newTheme;
+        const auto& cfg = m_themeManager->currentTheme();
+        statusBar()->showMessage(tr("主题: %1").arg(cfg.name), 3000);
+        // Update tray icon if themed
+        if (m_trayIcon) {
+            QString iconPath = cfg.resolvedTrayIconPath(m_themeManager->themesDirectory());
+            if (!iconPath.isEmpty() && QFile::exists(iconPath)) {
+                m_trayIcon->setIcon(QIcon(iconPath));
+            } else if (!QApplication::windowIcon().isNull()) {
+                m_trayIcon->setIcon(QApplication::windowIcon());
+            }
+        }
+    }
 }
 
 void MainWindow::onToggleSidebar()
@@ -805,12 +689,20 @@ void MainWindow::onAbout()
 void MainWindow::onPreferences()
 {
     PreferencesDialog dialog(this);
+    // Pass available themes to the dialog
+    if (m_themeManager) {
+        dialog.setThemeList(m_themeManager->availableThemes(), m_currentThemeKey);
+    }
+
     if (dialog.exec() == QDialog::Accepted) {
         // Apply display settings
-        int newTheme = dialog.themeMode();
-        if (newTheme != m_themeMode) {
-            m_themeMode = newTheme;
-            applyTheme();
+        if (m_themeManager) {
+            QString newTheme = dialog.themeName();
+            if (!newTheme.isEmpty() && newTheme != m_currentThemeKey) {
+                if (m_themeManager->setTheme(newTheme)) {
+                    m_currentThemeKey = newTheme;
+                }
+            }
         }
 
         // Apply search settings

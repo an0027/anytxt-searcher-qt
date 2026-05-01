@@ -185,6 +185,7 @@ set(ANYTXT_SOURCES
     src/core/index_queue.cpp
     src/core/rule_engine.cpp
     src/core/notification_manager.cpp
+    src/core/theme_config.cpp
 )
 
 if(HAS_POPPLER)
@@ -248,6 +249,13 @@ else()
     target_compile_options(anytxt-searcher PRIVATE -Wall -Wextra)
 endif()
 setup_target(anytxt-searcher)
+
+# Test target (theme system)
+add_executable(test-theme test_theme.cpp src/core/theme_config.cpp)
+setup_target(test-theme)
+
+add_executable(test-theme-minimal test_theme_minimal.cpp src/core/theme_config.cpp)
+setup_target(test-theme-minimal)
 
 # Summary
 message(STATUS "")

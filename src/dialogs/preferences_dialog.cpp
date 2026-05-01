@@ -1,5 +1,9 @@
 /*
  * preferences_dialog.cpp - 偏好设置对话框实现
+ *
+ * 显示选项卡：支持主题切换（动态加载 ThemeManager 中的主题列表）、
+ * 搜索参数、高亮颜色和索引配置。
+ * 调用方需在显示前通过 setThemeList() 提供可用主题列表。
  */
 
 #include "preferences_dialog.h"
@@ -13,6 +17,7 @@
 #include <QSettings>
 #include <QFont>
 #include <QComboBox>
+#include <QDebug>
 
 PreferencesDialog::PreferencesDialog(QWidget* parent)
     : QDialog(parent)
@@ -40,6 +45,18 @@ void PreferencesDialog::setupUI()
     connect(btnBox, &QDialogButtonBox::accepted, this, &PreferencesDialog::onApply);
     connect(btnBox, &QDialogButtonBox::rejected, this, &QDialog::reject);
     layout->addWidget(btnBox);
+}
+
+void PreferencesDialog::setThemeList(const QStringList& themeNames, const QString& currentTheme)
+{
+    m_themeCombo->clear();
+    int selectIdx = 0;
+    for (int i = 0; i < themeNames.size(); ++i) {
+        m_themeCombo->addItem(themeNames[i], themeNames[i]);
+        if (themeNames[i] == currentTheme)
+            selectIdx = i;
+    }
+    m_themeCombo->setCurrentIndex(selectIdx);
 }
 
 QWidget* PreferencesDialog::createGeneralTab()
@@ -79,9 +96,7 @@ QWidget* PreferencesDialog::createDisplayTab()
     auto* themeForm = new QFormLayout(themeGroup);
 
     m_themeCombo = new QComboBox(w);
-    m_themeCombo->addItem(tr("系统默认"), 0);
-    m_themeCombo->addItem(tr("暗色主题"), 1);
-    m_themeCombo->addItem(tr("VS Code 亮色"), 2);
+    // Items populated dynamically by setThemeList() before exec()
     themeForm->addRow(tr("界面主题:"), m_themeCombo);
 
     layout->addWidget(themeGroup);
@@ -137,8 +152,6 @@ void PreferencesDialog::loadCurrentSettings()
 
     m_pageSizeSpin->setValue(settings.value("search/pageSize", 50).toInt());
     m_autoLoadCheck->setChecked(settings.value("search/autoLoadLastSearch", false).toBool());
-    int themeIdx = m_themeCombo->findData(settings.value("app/themeMode", 0).toInt());
-    if (themeIdx >= 0) m_themeCombo->setCurrentIndex(themeIdx);
 
     m_selectedColor = QColor(settings.value("app/highlightColor", "#FFD54F").toString());
     m_colorBtn->setStyleSheet(
@@ -155,7 +168,8 @@ void PreferencesDialog::onApply()
     settings.setValue("search/lastScope", m_scopeCombo->currentData().toString());
     settings.setValue("search/pageSize", m_pageSizeSpin->value());
     settings.setValue("search/autoLoadLastSearch", m_autoLoadCheck->isChecked());
-    settings.setValue("app/themeMode", m_themeCombo->currentData().toInt());
+    // Theme is saved as string key, not int
+    settings.setValue("app/theme", m_themeCombo->currentData().toString());
     settings.setValue("app/highlightColor", m_selectedColor.name());
     settings.setValue("index/batchSize", m_batchSizeSpin->value());
     settings.setValue("index/enableSpelling", m_spellingCheck->isChecked());
@@ -178,7 +192,7 @@ void PreferencesDialog::onPickColor()
 QString PreferencesDialog::defaultScope() const { return m_scopeCombo->currentData().toString(); }
 int PreferencesDialog::pageSize() const { return m_pageSizeSpin->value(); }
 bool PreferencesDialog::autoLoadLastSearch() const { return m_autoLoadCheck->isChecked(); }
-int PreferencesDialog::themeMode() const { return m_themeCombo->currentData().toInt(); }
+QString PreferencesDialog::themeName() const { return m_themeCombo->currentData().toString(); }
 QColor PreferencesDialog::highlightColor() const { return m_selectedColor; }
 int PreferencesDialog::batchSize() const { return m_batchSizeSpin->value(); }
 bool PreferencesDialog::enableSpelling() const { return m_spellingCheck->isChecked(); }
