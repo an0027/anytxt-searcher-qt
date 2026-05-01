@@ -38,7 +38,6 @@ class SearchBar;
 class ResultsWidget;
 class PreviewWidget;
 class FilePanel;
-class FilterPanel;
 class MatchPanel;
 class ImportDialog;
 class ExportDialog;
@@ -92,7 +91,6 @@ private:
 
     SearchBar* m_searchBar = nullptr;
     FilePanel* m_filePanel = nullptr;
-    FilterPanel* m_filterPanel = nullptr;
     PreviewWidget* m_previewWidget = nullptr;
     MatchPanel* m_matchPanel = nullptr;
     QSplitter* m_hSplitter = nullptr;

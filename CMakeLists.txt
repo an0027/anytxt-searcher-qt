@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.16)
+﻿cmake_minimum_required(VERSION 3.16)
 project(anytxt-searcher LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -7,26 +7,26 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
-# ═══════════════════════════════════════════════════════════════
-# Qt 版本探测
-# ═══════════════════════════════════════════════════════════════
+# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?
+# Qt 鐗堟湰鎺㈡祴
+# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?
 find_package(Qt6 QUIET COMPONENTS Widgets Concurrent)
 
 if(Qt6_FOUND)
-    message(STATUS "✓ Using Qt6 (${Qt6_VERSION})")
+    message(STATUS "鉁?Using Qt6 (${Qt6_VERSION})")
     set(QT_LIBS Qt6::Widgets Qt6::Concurrent)
 else()
     find_package(Qt5 QUIET COMPONENTS Widgets Concurrent)
     if(NOT Qt5_FOUND)
-        message(FATAL_ERROR "✗ Qt6/Qt5 not found")
+        message(FATAL_ERROR "鉁?Qt6/Qt5 not found")
     endif()
-    message(STATUS "✓ Using Qt5 (${Qt5_VERSION})")
+    message(STATUS "鉁?Using Qt5 (${Qt5_VERSION})")
     set(QT_LIBS Qt5::Widgets Qt5::Concurrent)
 endif()
 
-# ═══════════════════════════════════════════════════════════════
+# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?
 # Xapian (required) - manually find to avoid vcpkg path issues with MinGW
-# ═══════════════════════════════════════════════════════════════
+# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?
 # Try standard find first
 find_path(XAPIAN_INCLUDE_DIRS xapian.h
     PATHS
@@ -45,16 +45,16 @@ find_library(XAPIAN_LIBRARIES
 )
 
 if(NOT XAPIAN_INCLUDE_DIRS OR NOT XAPIAN_LIBRARIES)
-    message(FATAL_ERROR "✗ xapian-core not found. Install via vcpkg: vcpkg install xapian")
+    message(FATAL_ERROR "鉁?xapian-core not found. Install via vcpkg: vcpkg install xapian")
 endif()
 
-message(STATUS "✓ xapian-core found")
+message(STATUS "鉁?xapian-core found")
 message(STATUS "  Includes: ${XAPIAN_INCLUDE_DIRS}")
 message(STATUS "  Library:  ${XAPIAN_LIBRARIES}")
 
-# ═══════════════════════════════════════════════════════════════
+# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?
 # Optional dependencies
-# ═══════════════════════════════════════════════════════════════
+# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?
 set(HAS_POPPLER FALSE)
 set(HAS_TESSERACT FALSE)
 set(HAS_LIBZIP FALSE)
@@ -65,17 +65,17 @@ if(PkgConfig_FOUND)
     pkg_check_modules(POPPLER QUIET poppler-cpp)
     if(POPPLER_FOUND)
         set(HAS_POPPLER TRUE)
-        message(STATUS "✓ poppler-cpp found")
+        message(STATUS "鉁?poppler-cpp found")
     endif()
     pkg_check_modules(TESSERACT QUIET tesseract)
     if(TESSERACT_FOUND)
         set(HAS_TESSERACT TRUE)
-        message(STATUS "✓ tesseract found")
+        message(STATUS "鉁?tesseract found")
     endif()
     pkg_check_modules(ZIP QUIET libzip)
     if(ZIP_FOUND)
         set(HAS_LIBZIP TRUE)
-        message(STATUS "✓ libzip found")
+        message(STATUS "鉁?libzip found")
     endif()
 endif()
 
@@ -94,7 +94,7 @@ if(NOT HAS_POPPLER)
     )
     if(POPPLER_INCLUDE_DIRS AND POPPLER_LIBRARIES)
         set(HAS_POPPLER TRUE)
-        message(STATUS "✓ poppler-cpp found (direct path)")
+        message(STATUS "鉁?poppler-cpp found (direct path)")
         message(STATUS "  Includes: ${POPPLER_INCLUDE_DIRS}")
         message(STATUS "  Library:  ${POPPLER_LIBRARIES}")
     endif()
@@ -115,7 +115,7 @@ if(NOT HAS_TESSERACT)
     )
     if(TESSERACT_INCLUDE_DIRS AND TESSERACT_LIBRARIES)
         set(HAS_TESSERACT TRUE)
-        message(STATUS "✓ tesseract found (direct path)")
+        message(STATUS "鉁?tesseract found (direct path)")
         message(STATUS "  Includes: ${TESSERACT_INCLUDE_DIRS}")
         message(STATUS "  Library:  ${TESSERACT_LIBRARIES}")
     endif()
@@ -137,7 +137,7 @@ if(LEPT_LIBRARIES AND LEPT_INCLUDE_DIRS)
     # Check that it's really found, not a NOTFOUND placeholder
     string(REGEX MATCH "NOTFOUND" _lept_notfound "${LEPT_LIBRARIES}")
     if(NOT _lept_notfound)
-        message(STATUS "✓ leptonica found")
+        message(STATUS "鉁?leptonica found")
         message(STATUS "  Library:  ${LEPT_LIBRARIES}")
     else()
         set(LEPT_LIBRARIES "")
@@ -163,15 +163,15 @@ if(NOT HAS_LIBZIP)
     )
     if(ZIP_INCLUDE_DIRS AND ZIP_LIBRARIES)
         set(HAS_LIBZIP TRUE)
-        message(STATUS "✓ libzip found (direct path)")
+        message(STATUS "鉁?libzip found (direct path)")
         message(STATUS "  Includes: ${ZIP_INCLUDE_DIRS}")
         message(STATUS "  Library:  ${ZIP_LIBRARIES}")
     endif()
 endif()
 
-# ═══════════════════════════════════════════════════════════════
+# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?
 # Conditional source lists
-# ═══════════════════════════════════════════════════════════════
+# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?
 set(ANYTXT_SOURCES
     src/main.cpp
     src/core/config.cpp
@@ -220,9 +220,9 @@ if(HAS_LIBZIP)
     list(APPEND ANYTXT_DEFS HAS_LIBZIP)
 endif()
 
-# ═══════════════════════════════════════════════════════════════
+# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?
 # Target setup
-# ═══════════════════════════════════════════════════════════════
+# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?
 macro(setup_target TARGET)
     target_include_directories(${TARGET} PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -266,17 +266,17 @@ else()
 endif()
 setup_target(anytxt-searcher)
 
-# ═══════════════════════════════════════════════════════════════
+# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?
 # Feature summary
-# ═══════════════════════════════════════════════════════════════
+# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?
 message(STATUS "")
-message(STATUS "═══════════════════════════════════")
+message(STATUS "鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?)
 message(STATUS " Build Configuration Summary")
-message(STATUS "═══════════════════════════════════")
+message(STATUS "鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?)
 message(STATUS "  Qt:        ${Qt6_VERSION}${Qt5_VERSION}")
-message(STATUS "  Xapian:    ✓ (found)")
+message(STATUS "  Xapian:    鉁?(found)")
 message(STATUS "  PDF:       ${HAS_POPPLER}")
 message(STATUS "  OCR:       ${HAS_TESSERACT}")
 message(STATUS "  ZIP:       ${HAS_LIBZIP}")
-message(STATUS "═══════════════════════════════════")
+message(STATUS "鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?)
 

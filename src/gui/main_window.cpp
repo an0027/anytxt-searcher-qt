@@ -5,7 +5,6 @@
 #include "gui/results_widget.h"
 #include "gui/preview_widget.h"
 #include "gui/file_panel.h"
-#include "gui/filter_panel.h"
 #include "gui/match_panel.h"
 #include "dialogs/import_dialog.h"
 #include "dialogs/export_dialog.h"
@@ -225,14 +224,11 @@ void MainWindow::setupCentralWidget()
     m_hSplitter = new QSplitter(Qt::Horizontal, this);
     m_hSplitter->setHandleWidth(1);
 
-    // Left panel: filter + file list in vertical splitter
+    // Left panel: file list
     m_leftPanel = new QWidget(this);
     auto* leftLayout = new QVBoxLayout(m_leftPanel);
     leftLayout->setContentsMargins(0, 0, 0, 0);
     leftLayout->setSpacing(0);
-
-    m_filterPanel = new FilterPanel(this);
-    leftLayout->addWidget(m_filterPanel);
 
     m_filePanel = new FilePanel(this);
     leftLayout->addWidget(m_filePanel, 1);
@@ -309,7 +305,7 @@ void MainWindow::setupConnections()
         statusBar()->showMessage(tr("已排除: %1").arg(QFileInfo(path).fileName()), 3000);
     });
 
-    connect(m_filterPanel, &FilterPanel::filtersChanged, this, [this](const QVariantMap& filters) {
+    connect(m_filePanel, &FilePanel::fileSelected, this, &MainWindow::onResultSelected);
         // Convert QVariantMap to QMap<QString,QString>
         m_currentFilters.clear();
         for (auto it = filters.begin(); it != filters.end(); ++it) {
