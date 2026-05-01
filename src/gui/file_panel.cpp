@@ -52,9 +52,9 @@ void FilePanel::setupUI()
 
     // File tree view (Windows Explorer style)
     m_tree = new QTreeWidget(this);
-    m_tree->setColumnCount(4);
+    m_tree->setColumnCount(5);
     m_tree->setHeaderLabels({
-        tr("名称"), tr("修改日期"), tr("大小"), tr("类型")
+        tr("名称"), tr("修改日期"), tr("大小"), tr("类型"), tr("相关性")
     });
     m_tree->setAlternatingRowColors(true);
     m_tree->setRootIsDecorated(false);
@@ -67,6 +67,7 @@ void FilePanel::setupUI()
     m_tree->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
     m_tree->header()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
     m_tree->header()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
+    m_tree->header()->setSectionResizeMode(4, QHeaderView::ResizeToContents);
     m_tree->header()->setSortIndicatorShown(true);
     m_tree->setColumnWidth(0, 180);
 
@@ -205,6 +206,16 @@ QTreeWidgetItem* FilePanel::createFileRow(const Document& doc, int idx)
     QString ext = doc.fileExt.toUpper();
     if (ext.isEmpty()) ext = tr("文件");
     item->setText(3, ext);
+
+    // Relevance
+    QString rel = QString("%1%").arg(doc.percent);
+    item->setText(4, rel);
+    if (doc.percent >= 80)
+        item->setForeground(4, QBrush(QColor("#2E7D32")));
+    else if (doc.percent >= 50)
+        item->setForeground(4, QBrush(QColor("#F57F17")));
+    else
+        item->setForeground(4, QBrush(QColor("#999")));
 
     return item;
 }
