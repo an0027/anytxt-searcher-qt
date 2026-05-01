@@ -1,4 +1,4 @@
-# Build directories
+﻿# Build directories
 build/
 build-*/
 cmake-build-*/
@@ -17,6 +17,6 @@ Thumbs.db
 # Toolchain files
 toolchain-*.cmake
 
-deps/
 
+deps/
 platforms/
