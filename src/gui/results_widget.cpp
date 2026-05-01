@@ -24,6 +24,7 @@
 
 ResultsWidget::ResultsWidget(QWidget* parent)
     : QWidget(parent)
+    , m_dragStartPos(-1, -1)
 {
     setupUI();
 }
@@ -34,7 +35,7 @@ void ResultsWidget::mouseMoveEvent(QMouseEvent* event)
     if (!(event->buttons() & Qt::LeftButton))
         return QWidget::mouseMoveEvent(event);
 
-    if (!m_dragStartPos.isValid())
+    if (m_dragStartPos.x() < 0)
         m_dragStartPos = event->pos();
 
     if ((event->pos() - m_dragStartPos).manhattanLength() < 10)

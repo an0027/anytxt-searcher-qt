@@ -1,5 +1,5 @@
-// ============================================================================
-// main_window.h — 主窗口定义
+﻿// ============================================================================
+// main_window.h 鈥?涓荤獥鍙ｅ畾涔?
 // ============================================================================
 #ifndef ANYTXT_MAIN_WINDOW_H
 #define ANYTXT_MAIN_WINDOW_H
@@ -17,6 +17,8 @@
 #include <QMutex>
 #include <QFutureWatcher>
 #include <QSystemTrayIcon>
+#include <QSet>
+#include "core/notification_manager.h"
 #include <QMap>
 #include <memory>
 #include "core/document.h"
@@ -28,7 +30,7 @@ class XapianSearcher;
 class ParserManager;
 class FileWatcher;
 class IndexQueue;
-class NotificationManager;
+
 class SearchBar;
 class ResultsWidget;
 class PreviewWidget;
@@ -113,7 +115,7 @@ private:
     bool m_currentSortReverse = false;
     int m_currentPage = 1;
     int m_pageSize = 50;
-    int m_themeMode = 0; // 0=系统默认, 1=暗色, 2=VS Code亮色
+    int m_themeMode = 0; // 0=绯荤粺榛樿, 1=鏆楄壊, 2=VS Code浜壊
     bool m_sidebarVisible = true;
     QStringList m_searchHistory;
     QSet<QString> m_excludedPaths;

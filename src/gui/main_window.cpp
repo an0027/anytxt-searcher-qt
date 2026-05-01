@@ -339,7 +339,8 @@ void MainWindow::loadSettings()
     m_sidebarVisible = settings.value("app/sidebarVisible", true).toBool();
     m_currentPage = settings.value("search/page", 1).toInt();
     m_pageSize = settings.value("search/pageSize", 50).toInt();
-    m_excludedPaths = settings.value("app/excludedPaths", QStringList()).toStringList().toSet();
+    QStringList excludedPaths = settings.value("app/excludedPaths", QStringList()).toStringList();
+    m_excludedPaths = QSet<QString>(excludedPaths.begin(), excludedPaths.end());
     m_searchHistory = settings.value("search/history", QStringList()).toStringList();
     m_searchBar->setHistory(m_searchHistory);
     QByteArray geometry = settings.value("app/geometry").toByteArray();
@@ -972,9 +973,9 @@ void MainWindow::onQueueProgress(int indexed, int total, const QString& currentF
     if (m_lastIndexStartTime == 0)
         m_lastIndexStartTime = QDateTime::currentSecsSinceEpoch();
 
-    // Progress notification via manager
-    if (m_notificationManager)
-        m_notificationManager->notifyIndexProgress(indexed, total, currentFile);
+    // Track start time on first progress
+    if (m_lastIndexStartTime == 0)
+        m_lastIndexStartTime = QDateTime::currentSecsSinceEpoch();
 }
 
 void MainWindow::onQueueFinished(int indexed, int failed)
@@ -990,9 +991,6 @@ void MainWindow::onQueueFinished(int indexed, int failed)
                 : 0;
             m_notificationManager->notifyIndexComplete(indexed, failed, elapsed);
         }
-    }
-    if (indexed > 0 && m_notificationManager) {
-        m_notificationManager->notifyFileWatchNewFiles(indexed);
     }
     if (m_database && m_database->isOpen()) m_database->refresh();
 }
