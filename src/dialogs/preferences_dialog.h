@@ -23,7 +23,7 @@ public:
     QString defaultScope() const;
     int pageSize() const;
     bool autoLoadLastSearch() const;
-    bool darkTheme() const;
+    int themeMode() const;
     QColor highlightColor() const;
     int batchSize() const;
     bool enableSpelling() const;
@@ -47,7 +47,7 @@ private:
     QCheckBox* m_autoLoadCheck;
 
     // Display
-    QCheckBox* m_darkThemeCheck;
+    QComboBox* m_themeCombo;
     QPushButton* m_colorBtn;
     QColor m_selectedColor;
 

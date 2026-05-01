@@ -12,6 +12,7 @@
 #include <QColorDialog>
 #include <QSettings>
 #include <QFont>
+#include <QComboBox>
 
 PreferencesDialog::PreferencesDialog(QWidget* parent)
     : QDialog(parent)
@@ -77,8 +78,11 @@ QWidget* PreferencesDialog::createDisplayTab()
     auto* themeGroup = new QGroupBox(tr("主题"), w);
     auto* themeForm = new QFormLayout(themeGroup);
 
-    m_darkThemeCheck = new QCheckBox(tr("使用暗色主题"), w);
-    themeForm->addRow(m_darkThemeCheck);
+    m_themeCombo = new QComboBox(w);
+    m_themeCombo->addItem(tr("系统默认"), 0);
+    m_themeCombo->addItem(tr("暗色主题"), 1);
+    m_themeCombo->addItem(tr("VS Code 亮色"), 2);
+    themeForm->addRow(tr("界面主题:"), m_themeCombo);
 
     layout->addWidget(themeGroup);
 
@@ -133,7 +137,8 @@ void PreferencesDialog::loadCurrentSettings()
 
     m_pageSizeSpin->setValue(settings.value("search/pageSize", 50).toInt());
     m_autoLoadCheck->setChecked(settings.value("search/autoLoadLastSearch", false).toBool());
-    m_darkThemeCheck->setChecked(settings.value("app/darkTheme", false).toBool());
+    int themeIdx = m_themeCombo->findData(settings.value("app/themeMode", 0).toInt());
+    if (themeIdx >= 0) m_themeCombo->setCurrentIndex(themeIdx);
 
     m_selectedColor = QColor(settings.value("app/highlightColor", "#FFD54F").toString());
     m_colorBtn->setStyleSheet(
@@ -150,7 +155,7 @@ void PreferencesDialog::onApply()
     settings.setValue("search/lastScope", m_scopeCombo->currentData().toString());
     settings.setValue("search/pageSize", m_pageSizeSpin->value());
     settings.setValue("search/autoLoadLastSearch", m_autoLoadCheck->isChecked());
-    settings.setValue("app/darkTheme", m_darkThemeCheck->isChecked());
+    settings.setValue("app/themeMode", m_themeCombo->currentData().toInt());
     settings.setValue("app/highlightColor", m_selectedColor.name());
     settings.setValue("index/batchSize", m_batchSizeSpin->value());
     settings.setValue("index/enableSpelling", m_spellingCheck->isChecked());
@@ -173,7 +178,7 @@ void PreferencesDialog::onPickColor()
 QString PreferencesDialog::defaultScope() const { return m_scopeCombo->currentData().toString(); }
 int PreferencesDialog::pageSize() const { return m_pageSizeSpin->value(); }
 bool PreferencesDialog::autoLoadLastSearch() const { return m_autoLoadCheck->isChecked(); }
-bool PreferencesDialog::darkTheme() const { return m_darkThemeCheck->isChecked(); }
+int PreferencesDialog::themeMode() const { return m_themeCombo->currentData().toInt(); }
 QColor PreferencesDialog::highlightColor() const { return m_selectedColor; }
 int PreferencesDialog::batchSize() const { return m_batchSizeSpin->value(); }
 bool PreferencesDialog::enableSpelling() const { return m_spellingCheck->isChecked(); }

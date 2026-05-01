@@ -113,7 +113,7 @@ private:
     bool m_currentSortReverse = false;
     int m_currentPage = 1;
     int m_pageSize = 50;
-    bool m_darkTheme = false;
+    int m_themeMode = 0; // 0=系统默认, 1=暗色, 2=VS Code亮色
     bool m_sidebarVisible = true;
     QStringList m_searchHistory;
     QSet<QString> m_excludedPaths;
