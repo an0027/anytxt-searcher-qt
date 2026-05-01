@@ -985,7 +985,14 @@ void MainWindow::setupTrayIcon()
     if (!QSystemTrayIcon::isSystemTrayAvailable()) return;
 
     m_trayIcon = new QSystemTrayIcon(this);
-    m_trayIcon->setIcon(QApplication::windowIcon());
+    QIcon appIcon = QApplication::windowIcon();
+    if (appIcon.isNull()) {
+        // Fallback: create a simple pixmap icon
+        QPixmap pix(32, 32);
+        pix.fill(QColor("#1976D2"));
+        appIcon = QIcon(pix);
+    }
+    m_trayIcon->setIcon(appIcon);
     m_trayIcon->setToolTip(tr("AnyTXT Searcher"));
 
     // Context menu
