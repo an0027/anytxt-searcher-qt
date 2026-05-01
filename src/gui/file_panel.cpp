@@ -116,14 +116,7 @@ void FilePanel::applySort()
         item->setToolTip(doc.filePath);
         item->setData(Qt::UserRole, idx);
 
-        // Color by relevance
-        if (doc.percent >= 80)
-            item->setForeground(QBrush(QColor("#1B5E20")));
-        else if (doc.percent >= 50)
-            item->setForeground(QBrush(QColor("#E65100")));
-        else
-            item->setForeground(QBrush(QColor("#888")));
-
+        // File names use default theme color
         m_list->addItem(item);
         shown++;
     }
