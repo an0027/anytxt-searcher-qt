@@ -258,6 +258,9 @@ setup_target(test-theme)
 add_executable(test-theme-minimal test_theme_minimal.cpp src/core/theme_config.cpp)
 setup_target(test-theme-minimal)
 
+add_executable(test-theme-dialog test_theme_dialog.cpp src/core/theme_config.cpp src/dialogs/theme_dialog.cpp)
+setup_target(test-theme-dialog)
+
 # Summary
 message(STATUS "")
 message(STATUS "Build Configuration Summary")
