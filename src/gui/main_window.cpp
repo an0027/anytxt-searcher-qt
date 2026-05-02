@@ -11,6 +11,7 @@
 #include "dialogs/about_dialog.h"
 #include "dialogs/help_dialog.h"
 #include "dialogs/preferences_dialog.h"
+#include "dialogs/theme_dialog.h"
 #include "core/notification_manager.h"
 #include "dialogs/watch_settings_dialog.h"
 #include "core/config.h"
@@ -132,6 +133,9 @@ void MainWindow::setupToolBar()
 
     QAction* themeAction = addBtn(tr("切换主题"));
     connect(themeAction, &QAction::triggered, this, &MainWindow::onToggleTheme);
+
+    QAction* themeConfigAction = addBtn(tr("主题配置"));
+    connect(themeConfigAction, &QAction::triggered, this, &MainWindow::onThemeConfig);
 
     QAction* refreshAction = addBtn(tr("刷新"));
     connect(refreshAction, &QAction::triggered, this, [this]() {
@@ -648,6 +652,20 @@ void MainWindow::onToggleTheme()
             } else if (!QApplication::windowIcon().isNull()) {
                 m_trayIcon->setIcon(QApplication::windowIcon());
             }
+        }
+    }
+}
+
+void MainWindow::onThemeConfig()
+{
+    if (!m_themeManager) return;
+    ThemeDialog dialog(m_themeManager, this);
+    if (dialog.exec() == QDialog::Accepted) {
+        QString selected = dialog.selectedTheme();
+        if (!selected.isEmpty() && m_themeManager->setTheme(selected)) {
+            m_currentThemeKey = selected;
+            const auto& cfg = m_themeManager->currentTheme();
+            statusBar()->showMessage(tr("主题已应用: %1").arg(cfg.name), 3000);
         }
     }
 }

@@ -1,4 +1,4 @@
-﻿cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.16)
 project(anytxt-searcher LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -181,6 +181,7 @@ set(ANYTXT_SOURCES
     src/dialogs/help_dialog.cpp
     src/dialogs/preferences_dialog.cpp
     src/dialogs/watch_settings_dialog.cpp
+    src/dialogs/theme_dialog.cpp
     src/core/file_watcher.cpp
     src/core/index_queue.cpp
     src/core/rule_engine.cpp

@@ -67,6 +67,7 @@ private slots:
     void onHelp();
     void onAbout();
     void onPreferences();
+    void onThemeConfig();
     void onSortChanged(const QString& sortBy, bool reverse);
     void onWatchSettings();
     void onAddWatchFolder();
