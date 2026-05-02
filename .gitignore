@@ -6,6 +6,7 @@ cmake-build-*/
 # IDE files
 .idea/
 .vscode/
+.qtcreator/
 *.swp
 *.swo
 *~
