@@ -166,6 +166,7 @@ signals:
 
 private slots:
     void onFileChanged(const QString& filePath);
+    void onDirectoryChanged(const QString& dirPath);
 
 private:
     /** @brief 加载内置主题 */

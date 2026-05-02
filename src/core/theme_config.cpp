@@ -469,6 +469,8 @@ ThemeManager::ThemeManager(QObject* parent)
 
     connect(m_fileWatcher, &QFileSystemWatcher::fileChanged,
             this, &ThemeManager::onFileChanged);
+    connect(m_fileWatcher, &QFileSystemWatcher::directoryChanged,
+            this, &ThemeManager::onDirectoryChanged);
 }
 
 ThemeManager::~ThemeManager()
@@ -670,6 +672,11 @@ void ThemeManager::scanCustomThemes()
         return;
     }
 
+    // Ensure the themes directory is watched for content changes
+    if (!m_fileWatcher->directories().contains(m_themesDir)) {
+        m_fileWatcher->addPath(m_themesDir);
+    }
+
     QStringList filters = {"*.json", "*.theme"};
     QFileInfoList files = dir.entryInfoList(filters, QDir::Files, QDir::Name);
     for (const auto& fi : files) {
@@ -712,9 +719,26 @@ void ThemeManager::setupFileWatcher()
 void ThemeManager::onFileChanged(const QString& filePath)
 {
     QFileInfo fi(filePath);
+
+    // Windows editors often save by: write temp -> delete original -> rename temp to original
+    // This invalidates QFileSystemWatcher's file handle. Handle this case:
     if (!fi.exists()) {
-        // File was deleted or moved
+        // File was deleted or replaced (common on Windows editors).
         m_fileWatcher->removePath(filePath);
+        // If the file still exists on disk (was replaced), re-register
+        if (QFile::exists(filePath)) {
+            qDebug() << "ThemeManager: Theme file was replaced (re-watching):" << filePath;
+            QFileInfo newFi(filePath);
+            QString key = newFi.completeBaseName().toLower().replace(' ', '_');
+            registerTheme(filePath);
+            if (m_themes.contains(key) && m_currentTheme.name == m_themes[key].name) {
+                m_currentTheme = m_themes[key];
+                emit themeModified(key);
+                applyTheme();
+            }
+        } else {
+            qDebug() << "ThemeManager: Theme file removed:" << filePath;
+        }
         return;
     }
 
@@ -730,6 +754,29 @@ void ThemeManager::onFileChanged(const QString& filePath)
             m_currentTheme = m_themes[key];
             applyTheme();
         }
+    }
+}
+
+void ThemeManager::onDirectoryChanged(const QString& dirPath)
+{
+    Q_UNUSED(dirPath);
+    qDebug() << "ThemeManager: Themes directory changed, rescanning...";
+
+    // Remember current theme key before rescan
+    QString currentKey;
+    for (auto it = m_themes.constBegin(); it != m_themes.constEnd(); ++it) {
+        if (it.value().name == m_currentTheme.name) {
+            currentKey = it.key();
+            break;
+        }
+    }
+
+    rescanThemes();
+
+    // If current theme was a custom one, re-apply
+    if (!currentKey.isEmpty() && m_themes.contains(currentKey)) {
+        m_currentTheme = m_themes[currentKey];
+        applyTheme();
     }
 }
 
