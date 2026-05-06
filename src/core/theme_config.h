@@ -136,8 +136,8 @@ public:
     /** @brief 获取当前主题 */
     const ThemeConfig& currentTheme() const { return m_currentTheme; }
 
-    /** @brief 获取当前主题名 */
-    QString currentThemeName() const { return m_currentTheme.name; }
+    /** @brief 获取当前主题名（映射键，如 "dark"） */
+    QString currentThemeName() const { return m_currentThemeKey; }
 
     /** @brief 获取可用主题列表 */
     QStringList availableThemes() const { return m_themeNames; }
@@ -192,6 +192,7 @@ private:
     ThemeConfig m_currentTheme;             ///< 当前激活的主题
     QString m_themesDir;                    ///< 自定义主题目录
     QFileSystemWatcher* m_fileWatcher;      ///< 文件变更监控
+    QString m_currentThemeKey;              ///< 当前主题的映射键
     bool m_initialized = false;
 };
 

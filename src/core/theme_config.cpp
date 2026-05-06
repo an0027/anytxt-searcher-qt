@@ -490,7 +490,7 @@ void ThemeManager::initialize()
     // 3. Load saved theme preference
     QString savedTheme = loadThemePreference();
     if (savedTheme.isEmpty() || !m_themes.contains(savedTheme)) {
-        savedTheme = "Dark"; // Default to dark
+        savedTheme = "dark"; // Default to dark
     }
 
     setTheme(savedTheme);
@@ -731,7 +731,7 @@ void ThemeManager::onFileChanged(const QString& filePath)
             QFileInfo newFi(filePath);
             QString key = newFi.completeBaseName().toLower().replace(' ', '_');
             registerTheme(filePath);
-            if (m_themes.contains(key) && m_currentTheme.name == m_themes[key].name) {
+            if (m_themes.contains(key) && m_currentThemeKey == key) {
                 m_currentTheme = m_themes[key];
                 emit themeModified(key);
                 applyTheme();
@@ -749,7 +749,7 @@ void ThemeManager::onFileChanged(const QString& filePath)
     if (m_themes.contains(key)) {
         registerTheme(filePath);
         // If the changed theme is the current one, re-apply
-        if (m_currentTheme.name == m_themes[key].name) {
+        if (m_currentThemeKey == key) {
             emit themeModified(key);
             m_currentTheme = m_themes[key];
             applyTheme();
@@ -763,13 +763,7 @@ void ThemeManager::onDirectoryChanged(const QString& dirPath)
     qDebug() << "ThemeManager: Themes directory changed, rescanning...";
 
     // Remember current theme key before rescan
-    QString currentKey;
-    for (auto it = m_themes.constBegin(); it != m_themes.constEnd(); ++it) {
-        if (it.value().name == m_currentTheme.name) {
-            currentKey = it.key();
-            break;
-        }
-    }
+    QString currentKey = m_currentThemeKey;
 
     rescanThemes();
 
@@ -787,6 +781,7 @@ bool ThemeManager::setTheme(const QString& name)
         return false;
     }
 
+    m_currentThemeKey = name;
     m_currentTheme = m_themes[name];
     saveThemePreference(name);
     applyTheme();
@@ -797,15 +792,16 @@ bool ThemeManager::setTheme(const QString& name)
 void ThemeManager::applyTheme()
 {
     if (!m_currentTheme.isValid()) return;
-    if (!qApp) return; // No QApplication yet (testing context)
+    QApplication* app = qobject_cast<QApplication*>(QCoreApplication::instance());
+    if (!app) return; // No QApplication yet (testing context)
 
     // Apply application font
     QFont appFont = m_currentTheme.applicationFont();
-    qApp->setFont(appFont);
+    app->setFont(appFont);
 
     // Apply stylesheet
     QString sheet = m_currentTheme.toStyleSheet();
-    qApp->setStyleSheet(sheet);
+    app->setStyleSheet(sheet);
 
     qDebug() << "ThemeManager: Applied theme:" << m_currentTheme.name;
 }
