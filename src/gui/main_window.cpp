@@ -215,11 +215,22 @@ void MainWindow::setupCentralWidget()
 
 void MainWindow::setupStatusBar()
 {
+    // VS Code-style status bar items with hover effect
+    auto makeStatusItem = [this](QWidget* w) {
+        w->setStyleSheet(
+            "padding: 2px 8px; border: none;"
+            "background: transparent; color: #ffffff;");
+    };
+
     m_indexStatusLabel = new QLabel(tr("索引状态: 未初始化"), this);
+    makeStatusItem(m_indexStatusLabel);
+
     m_searchStatusLabel = new QLabel(this);
+    makeStatusItem(m_searchStatusLabel);
+
     m_progressBar = new QProgressBar(this);
     m_progressBar->setMaximumWidth(150);
-    m_progressBar->setMaximumHeight(16);
+    m_progressBar->setMaximumHeight(12);
     m_progressBar->setVisible(false);
 
     m_cancelSearchBtn = new QPushButton(tr("取消"), this);
@@ -227,7 +238,7 @@ void MainWindow::setupStatusBar()
     m_cancelSearchBtn->setVisible(false);
     m_cancelSearchBtn->setStyleSheet(
         "QPushButton { background-color: #d32f2f; color: white; border: none; "
-        "border-radius: 3px; font-size: 11px; font-weight: bold; }"
+        "border-radius: 3px; font-size: 11px; font-weight: bold; padding: 2px 8px; }"
         "QPushButton:hover { background-color: #b71c1c; }");
     connect(m_cancelSearchBtn, &QPushButton::clicked, this, [this]() {
         if (m_searchWatcher && m_searchWatcher->isRunning()) {
@@ -241,7 +252,7 @@ void MainWindow::setupStatusBar()
 
     statusBar()->addPermanentWidget(m_indexStatusLabel);
     statusBar()->addPermanentWidget(m_searchStatusLabel);
-    statusBar()->addWidget(m_cancelSearchBtn);
+    statusBar()->addPermanentWidget(m_cancelSearchBtn);
     statusBar()->addPermanentWidget(m_progressBar);
 }
 

@@ -23,7 +23,7 @@ void MatchPanel::setupUI()
         "QListWidget { background-color: #1e1e1e; color: #d4d4d4; "
         "border: none; font-size: 12px; }"
         "QListWidget::item { padding: 8px; border-bottom: 1px solid #333; }"
-        "QListWidget::item:selected { background-color: #094771; }"
+        "QListWidget::item:selected { background-color: #264f78; color: #ffffff; }"
         "QListWidget::item:hover { background-color: #2a2d2e; }");
     m_list->setWordWrap(true);
     m_list->setSpacing(1);

@@ -158,14 +158,20 @@ QString ThemeConfig::generateToolbarStyle() const
 
 QString ThemeConfig::generateStatusBarStyle() const
 {
-    QString bg = color("statusbar", "background", QColor("#007acc")).name();
+    QString bg = color("statusbar", "background", QColor("#2d2d2d")).name();
     QString fg = color("statusbar", "foreground", QColor("#ffffff")).name();
+    QString hoverBg = color("statusbar", "hover", QColor("rgba(255,255,255,0.12)")).name();
     QString fontSize = effect("statusbarFontSize", "12px");
 
     return QString(
-        "QStatusBar { background-color: %1; color: %2; font-size: %3; }"
-        "QStatusBar QLabel { color: %2; }"
-    ).arg(bg, fg, fontSize);
+        "QStatusBar { background-color: %1; color: %2; font-size: %3;"
+        "  border: none; min-height: 24px; }"
+        "QStatusBar::item { border: none; }"
+        "QStatusBar QLabel {"
+        "  color: %2; background: transparent; padding: 2px 8px;"
+        "  border: none; font-size: %3; }"
+        "QStatusBar QLabel:hover { background-color: %4; }"
+    ).arg(bg, fg, fontSize, hoverBg);
 }
 
 QString ThemeConfig::generateSplitterStyle() const
@@ -531,7 +537,7 @@ void ThemeManager::loadBuiltinThemes()
         QJsonObject toolbar; toolbar["background"] = "#2d2d2d"; toolbar["foreground"] = "#d4d4d4"; toolbar["border"] = "#3c3c3c"; toolbar["hover"] = "#3c3c3c"; toolbar["pressed"] = "#094771";
         colors["toolbar"] = toolbar;
 
-        QJsonObject statusbar; statusbar["background"] = "#007acc"; statusbar["foreground"] = "#ffffff";
+        QJsonObject statusbar; statusbar["background"] = "#2d2d2d"; statusbar["foreground"] = "#ffffff";
         colors["statusbar"] = statusbar;
 
         QJsonObject header; header["background"] = "#2d2d2d";
