@@ -382,8 +382,9 @@ void MainWindow::performSearch()
     QString query = m_currentQuery;
     QSet<QString> excluded = m_excludedPaths;
     QMap<QString, QString> filters = m_currentFilters;
-    int offset = (m_currentPage - 1) * m_pageSize;
-    int limit = m_pageSize;
+    // No pagination - file panel shows all results
+    int offset = 0;
+    int limit = 100000;
     QString sortBy = m_currentSortBy;
     bool sortReverse = m_currentSortReverse;
     QString matchType = m_currentMatchType;
@@ -422,14 +423,8 @@ void MainWindow::performSearch()
                 }
             }
             QMetaObject::invokeMethod(this, [this, result]() {
-                // Reload file list from index, then filter to show only matches
-                try {
-                    QVector<Document> allDocs = m_searcher->getAllDocuments();
-                    m_filePanel->setFiles(allDocs);
-                } catch (...) {}
-                QSet<int64_t> matchIds;
-                for (const auto& doc : result.first) matchIds.insert(doc.docId);
-                m_filePanel->setMatchIds(matchIds);
+                // Show only search results in file panel
+                m_filePanel->setFiles(result.first);
                 qint64 elapsed = m_searchStartTime > 0
                     ? QDateTime::currentMSecsSinceEpoch() - m_searchStartTime
                     : 0;

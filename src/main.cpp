@@ -1,9 +1,9 @@
-// ============================================================================
-// main.cpp — AnyTXT Searcher 入口文件
+﻿// ============================================================================
+// main.cpp 鈥?AnyTXT Searcher 鍏ュ彛鏂囦欢
 //
-// 功能说明：
-//   应用程序的主入口点。初始化 QApplication，设置应用元信息，
-//   解析命令行参数（索引路径），创建并显示主窗口。
+// 鍔熻兘璇存槑锛?
+//   搴旂敤绋嬪簭鐨勪富鍏ュ彛鐐广€傚垵濮嬪寲 QApplication锛岃缃簲鐢ㄥ厓淇℃伅锛?
+//   瑙ｆ瀽鍛戒护琛屽弬鏁帮紙绱㈠紩璺緞锛夛紝鍒涘缓骞舵樉绀轰富绐楀彛銆?
 // ============================================================================
 
 // Must include xapian before Qt to avoid keyword clashes
@@ -18,7 +18,7 @@
 #include "core/config.h"
 
 // -----------------------------------------------------------------------
-// main — 主入口函数
+// main 鈥?涓诲叆鍙ｅ嚱鏁?
 // -----------------------------------------------------------------------
 int main(int argc, char* argv[])
 {
@@ -27,23 +27,25 @@ int main(int argc, char* argv[])
     QApplication::setApplicationVersion("1.0.0");
     QApplication::setOrganizationName("AnyTXT");
     QApplication::setOrganizationDomain("anytxt.org");
+    // Set window icon from the app resource
+    app.setWindowIcon(QIcon(QStringLiteral(":/app.ico")));
     // Window icon loaded from app.rc resource
 
 
     QCommandLineParser parser;
-    parser.setApplicationDescription("桌面全文搜索工具");
+    parser.setApplicationDescription("妗岄潰鍏ㄦ枃鎼滅储宸ュ叿");
     parser.addHelpOption();
     parser.addVersionOption();
 
     QCommandLineOption indexDirOption(
         QStringList() << "i" << "index-dir",
-        "索引目录路径", "path"
+        "绱㈠紩鐩綍璺緞", "path"
     );
     parser.addOption(indexDirOption);
 
     parser.process(app);
 
-    // 如果命令行指定了索引目录则使用，否则从配置文件加载
+    // 濡傛灉鍛戒护琛屾寚瀹氫簡绱㈠紩鐩綍鍒欎娇鐢紝鍚﹀垯浠庨厤缃枃浠跺姞杞?
     QString indexPath;
     if (parser.isSet(indexDirOption)) {
         indexPath = parser.value(indexDirOption);
@@ -52,3 +54,5 @@ int main(int argc, char* argv[])
     mainWindow.show();
     return app.exec();
 }
+
+

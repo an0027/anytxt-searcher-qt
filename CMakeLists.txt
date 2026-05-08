@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.16)
+﻿cmake_minimum_required(VERSION 3.16)
 project(anytxt-searcher LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -174,6 +174,8 @@ set(ANYTXT_SOURCES
     src/gui/results_widget.cpp
     src/gui/preview_widget.cpp
     src/gui/file_panel.cpp
+    src/gui/lazy_file_model.cpp
+    src/gui/search_highlighter.cpp
     src/gui/match_panel.cpp
     src/dialogs/import_dialog.cpp
     src/dialogs/export_dialog.cpp
@@ -253,7 +255,7 @@ macro(setup_target TARGET)
     target_compile_definitions(${TARGET} PRIVATE ${ANYTXT_DEFS})
 endmacro()
 
-add_executable(anytxt-searcher WIN32 ${ANYTXT_SOURCES} app.rc app.ico)
+add_executable(anytxt-searcher WIN32 ${ANYTXT_SOURCES} app.rc app.ico app.qrc)
 if(MSVC)
     target_compile_options(anytxt-searcher PRIVATE /W4 /Zc:__cplusplus)
 else()
@@ -279,3 +281,5 @@ message(STATUS "  Xapian:    found")
 message(STATUS "  PDF:       ${HAS_POPPLER}")
 message(STATUS "  OCR:       ${HAS_TESSERACT}")
 message(STATUS "  ZIP:       ${HAS_LIBZIP}")
+
+

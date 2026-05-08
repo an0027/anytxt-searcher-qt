@@ -11,12 +11,40 @@
 #include "core/document.h"
 #include <QWidget>
 #include <QTabWidget>
-#include <QTextEdit>
+#include <QPlainTextEdit>
 #include <QTreeWidget>
 #include <QLabel>
 #include <QPushButton>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
+
+class ContentView;
+
+class LineNumberArea : public QWidget {
+public:
+    explicit LineNumberArea(ContentView* editor);
+    QSize sizeHint() const override;
+protected:
+    void paintEvent(QPaintEvent* event) override;
+private:
+    ContentView* m_editor;
+};
+
+class SearchHighlighter;
+
+class ContentView : public QPlainTextEdit {
+    Q_OBJECT
+public:
+    explicit ContentView(QWidget* parent = nullptr);
+    void lineNumberAreaPaintEvent(QPaintEvent* event);
+    int lineNumberAreaWidth() const;
+    void setHighlightKeywords(const QString& query);
+protected:
+    void resizeEvent(QResizeEvent* event) override;
+private:
+    LineNumberArea* m_lineNumberArea;
+    SearchHighlighter* m_highlighter = nullptr;
+};
 
 class PreviewWidget : public QWidget {
     Q_OBJECT
@@ -46,7 +74,7 @@ private:
     QPushButton* m_openFileBtn;
     QPushButton* m_copyPathBtn;
     QTabWidget* m_tabWidget;
-    QTextEdit* m_contentView;
+    ContentView* m_contentView;
     QTreeWidget* m_metadataView;
     QTextEdit* m_statsView;
 

@@ -5,13 +5,82 @@
  */
 
 #include <QHeaderView>
+#include <QPainter>
+#include <QTextBlock>
 #include <QScrollBar>
 #include "gui/preview_widget.h"
+#include "gui/search_highlighter.h"
 #include "utils/file_utils.h"
 #include "utils/string_utils.h"
 #include <QDateTime>
 #include <QDebug>
 
+// ====== LineNumberArea ======
+LineNumberArea::LineNumberArea(ContentView* editor)
+    : QWidget(editor), m_editor(editor) {}
+
+QSize LineNumberArea::sizeHint() const
+{
+    return QSize(m_editor->lineNumberAreaWidth(), 0);
+}
+
+void LineNumberArea::paintEvent(QPaintEvent* event)
+{
+    m_editor->lineNumberAreaPaintEvent(event);
+}
+
+// ====== ContentView ======
+ContentView::ContentView(QWidget* parent)
+    : QPlainTextEdit(parent)
+{
+    m_lineNumberArea = new LineNumberArea(this);
+    setReadOnly(true);
+    m_highlighter = new SearchHighlighter(document());
+    connect(this, &QPlainTextEdit::blockCountChanged, this, [this](int) {
+        setViewportMargins(lineNumberAreaWidth(), 0, 0, 0);
+    });
+    connect(this, &QPlainTextEdit::updateRequest, this, [this](const QRect& rect, int dy) {
+        if (dy) m_lineNumberArea->scroll(0, dy);
+        else m_lineNumberArea->update(0, rect.y(), m_lineNumberArea->width(), rect.height());
+    });
+}
+
+int ContentView::lineNumberAreaWidth() const
+{
+    int digits = 1, max = qMax(1, blockCount());
+    while (max >= 10) { max /= 10; digits++; }
+    return 10 + fontMetrics().horizontalAdvance(QLatin1Char('9')) * digits;
+}
+
+void ContentView::resizeEvent(QResizeEvent* event)
+{
+    QPlainTextEdit::resizeEvent(event);
+    QRect cr = contentsRect();
+    m_lineNumberArea->setGeometry(QRect(cr.left(), cr.top(), lineNumberAreaWidth(), cr.height()));
+}
+
+void ContentView::lineNumberAreaPaintEvent(QPaintEvent* event)
+{
+    QPainter painter(m_lineNumberArea);
+    painter.fillRect(event->rect(), QColor("#252526"));
+    QTextBlock block = firstVisibleBlock();
+    int bn = block.blockNumber(), top = qRound(blockBoundingGeometry(block).translated(contentOffset()).top());
+    int bottom = top + qRound(blockBoundingRect(block).height());
+    while (block.isValid() && top <= event->rect().bottom()) {
+        if (block.isVisible() && bottom >= event->rect().top()) {
+            painter.setPen(QColor("#858585"));
+            painter.drawText(0, top, m_lineNumberArea->width() - 4, fontMetrics().height(), Qt::AlignRight, QString::number(bn + 1));
+        }
+        block = block.next(); top = bottom; bottom = top + qRound(blockBoundingRect(block).height()); bn++;
+    }
+}
+
+void ContentView::setHighlightKeywords(const QString& query)
+{
+    if (m_highlighter) m_highlighter->setKeywords(query);
+}
+
+// ====== PreviewWidget ======
 PreviewWidget::PreviewWidget(QWidget* parent)
     : QWidget(parent)
 {
@@ -32,11 +101,10 @@ void PreviewWidget::setupUI()
         "padding: 6px 12px; border: 1px solid #555; border-bottom: none; }"
         "QTabBar::tab:selected { background-color: #1e1e1e; }");
 
-    // Content tab
-    m_contentView = new QTextEdit(this);
-    m_contentView->setReadOnly(true);
+    // Content tab with line numbers
+    m_contentView = new ContentView(this);
     m_contentView->setStyleSheet(
-        "QTextEdit { background-color: #1e1e1e; color: #d4d4d4; border: 1px solid #555; "
+        "QPlainTextEdit { background-color: #1e1e1e; color: #d4d4d4; border: 1px solid #555; "
         "font-family: 'Consolas', 'monospace'; font-size: 12px; }");
     m_tabWidget->addTab(m_contentView, tr("内容"));
 
@@ -108,44 +176,9 @@ void PreviewWidget::setDocument(const Document& doc, const QString& highlightQue
                 .toString("yyyy-MM-dd HH:mm:ss"));
     m_fileInfoLabel->setText(fileInfo);
 
-    // Content tab - with line numbers + anchors + red text + yellow highlight
-    QString content = doc.content.left(200000);
-    QStringList lines = content.split('\n');
-    int maxLines = qMin(lines.size(), 5000);
-
-    QString html;
-    html += QStringLiteral("<html><body style='background-color: #1e1e1e; color: #d4d4d4; "
-                           "font-family: Consolas, monospace; font-size: 13px; margin: 0; padding: 0;'>");
-
-    bool doHighlight = !highlightQuery.isEmpty();
-    for (int i = 0; i < maxLines; ++i) {
-        QString lineNum = QStringLiteral("%1").arg(i + 1, 4, 10, QChar(' '));
-        html += QStringLiteral("<div id='para_%1' style='display: flex; line-height: 1.3;'>")
-                .arg(i);
-        html += QStringLiteral("<span style='color: #858585; user-select: none; padding-right: 8px; width: 36px; text-align: right;'") +
-                QStringLiteral(">%1</span>").arg(lineNum);
-
-        if (lines[i].isEmpty()) {
-            html += QStringLiteral("<span style='color: #d4d4d4;'>&nbsp;</span>");
-        } else if (doHighlight) {
-            QString hl = StringUtils::highlightText(lines[i], highlightQuery);
-            html += QStringLiteral("<span style='color: #d4d4d4;'>%1</span>").arg(hl);
-        } else {
-            html += QStringLiteral("<span style='color: #d4d4d4;'>%1</span>")
-                    .arg(lines[i].toHtmlEscaped());
-        }
-
-        html += QStringLiteral("</div>");
-    }
-
-    if (lines.size() > maxLines) {
-        html += QStringLiteral("<div style='color: #888; padding-top: 8px;'>"
-                                "... 显示 %1 / %2 行</div>")
-                .arg(maxLines).arg(lines.size());
-    }
-
-    html += QStringLiteral("</body></html>");
-    m_contentView->setHtml(html);
+    // Set plain text (line numbers handled by LineNumberArea)
+    m_contentView->setPlainText(doc.content.left(200000));
+    m_contentView->setHighlightKeywords(highlightQuery);
     m_contentView->verticalScrollBar()->setValue(0);
 
     // Metadata tab
@@ -165,8 +198,12 @@ void PreviewWidget::setDocument(const Document& doc, const QString& highlightQue
 void PreviewWidget::scrollToParagraph(int paraIndex)
 {
     if (paraIndex < 0) return;
-    QString anchor = QStringLiteral("para_%1").arg(paraIndex);
-    m_contentView->scrollToAnchor(anchor);
+    QTextBlock block = m_contentView->document()->findBlockByNumber(paraIndex);
+    if (block.isValid()) {
+        QTextCursor cursor(block);
+        m_contentView->setTextCursor(cursor);
+        m_contentView->ensureCursorVisible();
+    }
 }
 
 void PreviewWidget::clear()

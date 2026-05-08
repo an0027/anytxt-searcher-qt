@@ -1,11 +1,15 @@
-#include "gui/file_panel.h"
-#include "utils/file_utils.h"
-#include <QFileInfo>
-#include <QMenu>
-#include <QAction>
-#include <QDebug>
+/*
+ * file_panel.cpp - 文件浏览面板（QTreeView + 虚拟滚动）
+ */
 
-FilePanel::FilePanel(QWidget* parent) : QWidget(parent) { setupUI(); }
+#include "file_panel.h"
+#include "lazy_file_model.h"
+#include <QVBoxLayout>
+
+FilePanel::FilePanel(QWidget* parent) : QWidget(parent)
+{
+    setupUI();
+}
 
 void FilePanel::setupUI()
 {
@@ -13,141 +17,52 @@ void FilePanel::setupUI()
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(2);
 
-    // Header: count + sort controls
-    auto* headerRow = new QHBoxLayout();
-    m_countLabel = new QLabel(tr("文件"), this);
-    m_countLabel->setStyleSheet("font-weight: bold; padding: 6px 8px;");
-    headerRow->addWidget(m_countLabel);
-    headerRow->addStretch();
+    m_countLabel = new QLabel(this);
+    m_countLabel->setStyleSheet("padding: 4px 8px; font-size: 12px; color: #888;");
+    layout->addWidget(m_countLabel);
 
-    auto* sortLabel = new QLabel(tr("排序:"), this);
-    sortLabel->setStyleSheet("font-size: 11px;");
-    headerRow->addWidget(sortLabel);
+    m_model = new LazyFileModel(this);
 
-    m_sortCombo = new QComboBox(this);
-    m_sortCombo->addItem(tr("文件名"), 0);
-    m_sortCombo->addItem(tr("相关性"), 1);
-    m_sortCombo->addItem(tr("修改日期"), 2);
-    m_sortCombo->addItem(tr("大小"), 3);
-    m_sortCombo->setCurrentIndex(1);
-    headerRow->addWidget(m_sortCombo);
+    m_view = new QTreeView(this);
+    m_view->setModel(m_model);
+    m_view->setRootIsDecorated(false);
+    m_view->setAlternatingRowColors(true);
+    m_view->setSortingEnabled(true);
+    m_view->sortByColumn(0, Qt::AscendingOrder);
+    m_view->setSelectionMode(QAbstractItemView::SingleSelection);
+    m_view->setUniformRowHeights(true);  // optimization for large lists
 
-    m_sortOrderBtn = new QPushButton(tr("v"), this);
-    m_sortOrderBtn->setFixedSize(24, 24);
-    headerRow->addWidget(m_sortOrderBtn);
-    layout->addLayout(headerRow);
+    auto* header = m_view->header();
+    header->setStretchLastSection(false);
+    header->setSectionResizeMode(0, QHeaderView::Stretch);
+    header->setSectionResizeMode(1, QHeaderView::ResizeToContents);
+    header->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+    header->setSectionResizeMode(3, QHeaderView::ResizeToContents);
+    header->setSortIndicatorShown(true);
 
-    // File list (single column)
-    m_list = new QListWidget(this);
-    m_list->setStyleSheet(
-        "QListWidget { border: 1px solid #b0b0b0; border-top: 2px solid #c0c0c0; "
-        "border-left: 2px solid #c0c0c0; font-size: 12px; }"
-        "QListWidget::item { padding: 4px 8px; }");
-    m_list->setContextMenuPolicy(Qt::CustomContextMenu);
-    layout->addWidget(m_list, 1);
-
-    // Connections
-    auto selectItem = [this](QListWidgetItem* item) {
-        if (!item) return;
-        int idx = item->data(Qt::UserRole).toInt();
-        if (idx >= 0 && idx < m_documents.size())
-            emit fileSelected(m_documents[idx]);
-    };
-    connect(m_list, &QListWidget::itemClicked, this, selectItem);
-    connect(m_list, &QListWidget::itemActivated, this, selectItem);
-
-    connect(m_list, &QListWidget::customContextMenuRequested, this, [this](const QPoint& pos) {
-        QListWidgetItem* item = m_list->itemAt(pos);
-        if (!item) return;
-        int idx = item->data(Qt::UserRole).toInt();
-        if (idx < 0 || idx >= m_documents.size()) return;
-        QMenu menu(this);
-        if (menu.addAction(tr("排除此文件")) == menu.exec(m_list->viewport()->mapToGlobal(pos)))
-            emit excludePath(m_documents[idx].filePath);
-    });
-
-    connect(m_sortCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            this, &FilePanel::onSortChanged);
-    connect(m_sortOrderBtn, &QPushButton::clicked, this, [this]() {
-        m_sortReverse = !m_sortReverse;
-        m_sortOrderBtn->setText(m_sortReverse ? tr("^") : tr("v"));
-        applySort();
-    });
-}
-
-void FilePanel::setFiles(const QVector<Document>& docs) { m_documents = docs; applySort(); }
-
-void FilePanel::applySort()
-{
-    m_list->clear();
-
-    // Collect indices
-    QVector<int> indices;
-    indices.reserve(m_documents.size());
-    for (int i = 0; i < m_documents.size(); ++i) {
-        if (m_hasActiveSearch && !m_matchIds.contains(m_documents[i].docId))
-            continue;
-        indices.append(i);
-    }
-
-    // Sort
-    std::sort(indices.begin(), indices.end(), [this](int a, int b) {
-        const auto& da = m_documents[a];
-        const auto& db = m_documents[b];
-        int cmp = 0;
-        switch (m_sortMode) {
-            case 0: cmp = QString::compare(da.fileName.toLower(), db.fileName.toLower()); break;
-            case 1: cmp = da.percent - db.percent; break;
-            case 2: cmp = (da.modifiedTime > db.modifiedTime) - (da.modifiedTime < db.modifiedTime); break;
-            case 3: cmp = (da.fileSize > db.fileSize) - (da.fileSize < db.fileSize); break;
+    connect(m_view, &QTreeView::clicked, this, [this](const QModelIndex& index) {
+        if (!index.isValid()) return;
+        QVariant v = m_model->data(index.siblingAtColumn(0), Qt::UserRole);
+        if (v.isValid()) {
+            int64_t docId = v.toLongLong();
+            int row = index.row();
+            if (row >= 0 && row < m_model->documentCount())
+                emit fileSelected(m_model->documentAt(row));
         }
-        if (cmp == 0) cmp = a - b;
-        return m_sortReverse ? cmp > 0 : cmp < 0;
     });
 
-    // Populate
-    int maxItems = 2000, shown = 0;
-    for (int idx : indices) {
-        if (shown >= maxItems) break;
-        const auto& doc = m_documents[idx];
-        QFileInfo fi(doc.filePath);
-        auto* item = new QListWidgetItem();
-        item->setText(fi.fileName());
-        item->setToolTip(doc.filePath);
-        item->setData(Qt::UserRole, idx);
-
-        // File names use default theme color
-        m_list->addItem(item);
-        shown++;
-    }
-    if (indices.size() > maxItems) {
-        auto* f = new QListWidgetItem();
-        f->setText(tr("... %1 个文件").arg(indices.size() - maxItems));
-        f->setForeground(QBrush(QColor("#888")));
-        m_list->addItem(f);
-    }
-    m_countLabel->setText(m_hasActiveSearch
-        ? tr("匹配 (%1)").arg(indices.size())
-        : tr("文件 (%1)").arg(indices.size()));
+    layout->addWidget(m_view, 1);
 }
 
-void FilePanel::setMatchIds(const QSet<int64_t>& matchDocIds)
+void FilePanel::setFiles(const QVector<Document>& docs)
 {
-    m_hasActiveSearch = true;
-    m_matchIds = matchDocIds;
-    applySort();
-    m_countLabel->setText(tr("文件 (%1 / %2 匹配)").arg(m_matchIds.size()).arg(m_documents.size()));
+    m_model->setDocuments(docs);
+    m_countLabel->setText(tr("共 %1 个文件").arg(docs.size()));
 }
 
 void FilePanel::clear()
 {
-    m_documents.clear(); m_matchIds.clear(); m_hasActiveSearch = false;
-    m_list->clear();
-    m_countLabel->setText(tr("文件"));
-}
-
-void FilePanel::onSortChanged(int /*index*/)
-{
-    m_sortMode = m_sortCombo->currentData().toInt();
-    applySort();
+    m_model->clear();
+    m_matchIds.clear();
+    m_countLabel->clear();
 }
