@@ -1,0 +1,177 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+
+  <?define ProductId = "*" ?>
+  <?define UpgradeCode = "{1D92467F-D4CF-4799-B7F1-949435D3C854}" ?>
+  <?define Version = "1.0.0.0" ?>
+
+  <Product Id="$(var.ProductId)"
+           Name="AnyTXT Searcher"
+           Language="1033"
+           Version="$(var.Version)"
+           Manufacturer="ShuChang"
+           UpgradeCode="$(var.UpgradeCode)">
+
+    <Package InstallerVersion="200"
+             Compressed="yes"
+             InstallScope="perMachine"
+             Platform="x64"
+             Manufacturer="ShuChang"
+             Description="AnyTXT Searcher - Desktop full-text search engine"
+             Comments="Built with Qt6 + Xapian + Tesseract OCR + Poppler"
+             />
+
+    <Media Id="1" Cabinet="anytxt.cab" EmbedCab="yes" CompressionLevel="high" />
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed."
+                  AllowSameVersionUpgrades="yes"
+                  Schedule="afterInstallValidate"
+                  />
+
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="INSTALLDIR" Name="AnyTXT Searcher">
+          <Directory Id="PLATFORMDIR" Name="platforms" />
+          <Directory Id="IMAGEFORMATSDIR" Name="imageformats" />
+          <Directory Id="ICONENGINESDIR" Name="iconengines" />
+          <Directory Id="STYLESDIR" Name="styles" />
+          <Directory Id="TLSDIR" Name="tls" />
+          <Directory Id="NETWORKINFODIR" Name="networkinformation" />
+          <Directory Id="GENERICDIR" Name="generic" />
+        </Directory>
+      </Directory>
+
+      <Directory Id="ProgramMenuFolder">
+        <Directory Id="ApplicationProgramsFolder" Name="AnyTXT Searcher" />
+      </Directory>
+      <Directory Id="DesktopFolder" Name="Desktop" />
+    </Directory>
+
+    <Feature Id="MainApplication" Title="AnyTXT Searcher" Level="1"
+             Description="AnyTXT Searcher - Desktop full-text search engine"
+             ConfigurableDirectory="INSTALLDIR">
+      <ComponentGroupRef Id="MainFiles" />
+      <ComponentGroupRef Id="PlatformPlugins" />
+      <ComponentGroupRef Id="ImageFormats" />
+      <ComponentGroupRef Id="IconEngines" />
+      <ComponentGroupRef Id="Styles" />
+      <ComponentGroupRef Id="Tls" />
+      <ComponentGroupRef Id="NetworkInfo" />
+      <ComponentGroupRef Id="Generic" />
+      <ComponentGroupRef Id="Shortcuts" />
+      <ComponentRef Id="RegistryEntries" />
+    </Feature>
+
+    <!-- 鈻堚枅鈻?涓荤▼搴?+ DLL 鈻堚枅鈻?-->
+    <ComponentGroup Id="MainFiles" Directory="INSTALLDIR">
+      <Component Guid="{10000001-0001-0001-0001-000000000001}"><File Source="$(var.BuildDir)\anytxt-searcher.exe" KeyPath="yes" /></Component>
+      <Component Guid="{10000001-0001-0001-0001-000000000002}"><File Source="$(var.BuildDir)\archive.dll" KeyPath="yes" /></Component>
+      <Component Guid="{10000001-0001-0001-0001-000000000003}"><File Source="$(var.BuildDir)\brotlicommon.dll" KeyPath="yes" /></Component>
+      <Component Guid="{10000001-0001-0001-0001-000000000004}"><File Source="$(var.BuildDir)\brotlidec.dll" KeyPath="yes" /></Component>
+      <Component Guid="{10000001-0001-0001-0001-000000000005}"><File Source="$(var.BuildDir)\bz2.dll" KeyPath="yes" /></Component>
+      <Component Guid="{10000001-0001-0001-0001-000000000006}"><File Source="$(var.BuildDir)\freetype.dll" KeyPath="yes" /></Component>
+      <Component Guid="{10000001-0001-0001-0001-000000000007}"><File Source="$(var.BuildDir)\gif.dll" KeyPath="yes" /></Component>
+      <Component Guid="{10000001-0001-0001-0001-000000000008}"><File Source="$(var.BuildDir)\iconv-2.dll" KeyPath="yes" /></Component>
+      <Component Guid="{10000001-0001-0001-0001-000000000009}"><File Source="$(var.BuildDir)\icuuc.dll" KeyPath="yes" /></Component>
+      <Component Guid="{10000001-0001-0001-0001-00000000000a}"><File Source="$(var.BuildDir)\jpeg62.dll" KeyPath="yes" /></Component>
+      <Component Guid="{10000001-0001-0001-0001-00000000000b}"><File Source="$(var.BuildDir)\leptonica-1.87.0.dll" KeyPath="yes" /></Component>
+      <Component Guid="{10000001-0001-0001-0001-00000000000c}"><File Source="$(var.BuildDir)\libcrypto-3-x64.dll" KeyPath="yes" /></Component>
+      <Component Guid="{10000001-0001-0001-0001-00000000000d}"><File Source="$(var.BuildDir)\libcurl.dll" KeyPath="yes" /></Component>
+      <Component Guid="{10000001-0001-0001-0001-00000000000e}"><File Source="$(var.BuildDir)\liblzma.dll" KeyPath="yes" /></Component>
+      <Component Guid="{10000001-0001-0001-0001-00000000000f}"><File Source="$(var.BuildDir)\libpng16.dll" KeyPath="yes" /></Component>
+      <Component Guid="{10000001-0001-0001-0001-000000000010}"><File Source="$(var.BuildDir)\libsharpyuv.dll" KeyPath="yes" /></Component>
+      <Component Guid="{10000001-0001-0001-0001-000000000011}"><File Source="$(var.BuildDir)\libwebp.dll" KeyPath="yes" /></Component>
+      <Component Guid="{10000001-0001-0001-0001-000000000012}"><File Source="$(var.BuildDir)\libwebpmux.dll" KeyPath="yes" /></Component>
+      <Component Guid="{10000001-0001-0001-0001-000000000013}"><File Source="$(var.BuildDir)\lz4.dll" KeyPath="yes" /></Component>
+      <Component Guid="{10000001-0001-0001-0001-000000000014}"><File Source="$(var.BuildDir)\msvcp140.dll" KeyPath="yes" /></Component>
+      <Component Guid="{10000001-0001-0001-0001-000000000015}"><File Source="$(var.BuildDir)\openjp2.dll" KeyPath="yes" /></Component>
+      <Component Guid="{10000001-0001-0001-0001-000000000016}"><File Source="$(var.BuildDir)\poppler-cpp.dll" KeyPath="yes" /></Component>
+      <Component Guid="{10000001-0001-0001-0001-000000000017}"><File Source="$(var.BuildDir)\poppler.dll" KeyPath="yes" /></Component>
+      <Component Guid="{10000001-0001-0001-0001-000000000018}"><File Source="$(var.BuildDir)\Qt6Core.dll" KeyPath="yes" /></Component>
+      <Component Guid="{10000001-0001-0001-0001-000000000019}"><File Source="$(var.BuildDir)\Qt6Gui.dll" KeyPath="yes" /></Component>
+      <Component Guid="{10000001-0001-0001-0001-00000000001a}"><File Source="$(var.BuildDir)\Qt6Network.dll" KeyPath="yes" /></Component>
+      <Component Guid="{10000001-0001-0001-0001-00000000001b}"><File Source="$(var.BuildDir)\Qt6Svg.dll" KeyPath="yes" /></Component>
+      <Component Guid="{10000001-0001-0001-0001-00000000001c}"><File Source="$(var.BuildDir)\Qt6Widgets.dll" KeyPath="yes" /></Component>
+      <Component Guid="{10000001-0001-0001-0001-00000000001d}"><File Source="$(var.BuildDir)\tesseract55.dll" KeyPath="yes" /></Component>
+      <Component Guid="{10000001-0001-0001-0001-00000000001e}"><File Source="$(var.BuildDir)\tiff.dll" KeyPath="yes" /></Component>
+      <Component Guid="{10000001-0001-0001-0001-00000000001f}"><File Source="$(var.BuildDir)\vcruntime140.dll" KeyPath="yes" /></Component>
+      <Component Guid="{10000001-0001-0001-0001-000000000020}"><File Source="$(var.BuildDir)\vcruntime140_1.dll" KeyPath="yes" /></Component>
+      <Component Guid="{10000001-0001-0001-0001-000000000021}"><File Source="$(var.BuildDir)\xapian-30.dll" KeyPath="yes" /></Component>
+      <Component Guid="{10000001-0001-0001-0001-000000000022}"><File Source="$(var.BuildDir)\z.dll" KeyPath="yes" /></Component>
+      <Component Guid="{10000001-0001-0001-0001-000000000023}"><File Source="$(var.BuildDir)\zip.dll" KeyPath="yes" /></Component>
+      <Component Guid="{10000001-0001-0001-0001-000000000024}"><File Source="$(var.BuildDir)\zstd.dll" KeyPath="yes" /></Component>
+    </ComponentGroup>
+
+    <!-- 鈻堚枅鈻?Qt 鎻掍欢 鈻堚枅鈻?-->
+    <ComponentGroup Id="PlatformPlugins" Directory="PLATFORMDIR">
+      <Component Guid="{20000001-0001-0001-0001-000000000001}"><File Source="$(var.BuildDir)\platforms\qwindows.dll" KeyPath="yes" /></Component>
+    </ComponentGroup>
+
+    <ComponentGroup Id="ImageFormats" Directory="IMAGEFORMATSDIR">
+      <Component Guid="{20000001-0001-0001-0001-000000000002}"><File Source="$(var.BuildDir)\imageformats\qgif.dll" Name="qgif.dll" KeyPath="yes" /></Component>
+      <Component Guid="{20000001-0001-0001-0001-000000000003}"><File Source="$(var.BuildDir)\imageformats\qico.dll" Name="qico.dll" KeyPath="yes" /></Component>
+      <Component Guid="{20000001-0001-0001-0001-000000000004}"><File Source="$(var.BuildDir)\imageformats\qjpeg.dll" Name="qjpeg.dll" KeyPath="yes" /></Component>
+      <Component Guid="{20000001-0001-0001-0001-000000000005}"><File Source="$(var.BuildDir)\imageformats\qsvg.dll" Name="qsvg.dll" KeyPath="yes" /></Component>
+    </ComponentGroup>
+
+    <ComponentGroup Id="IconEngines" Directory="ICONENGINESDIR">
+      <Component Guid="{20000001-0001-0001-0001-000000000006}"><File Source="$(var.BuildDir)\iconengines\qsvgicon.dll" Name="qsvgicon.dll" KeyPath="yes" /></Component>
+    </ComponentGroup>
+
+    <ComponentGroup Id="Styles" Directory="STYLESDIR">
+      <Component Guid="{20000001-0001-0001-0001-000000000007}"><File Source="$(var.BuildDir)\styles\qmodernwindowsstyle.dll" Name="qmodernwindowsstyle.dll" KeyPath="yes" /></Component>
+    </ComponentGroup>
+
+    <ComponentGroup Id="Tls" Directory="TLSDIR">
+      <Component Guid="{20000001-0001-0001-0001-000000000008}"><File Source="$(var.BuildDir)\tls\qcertonlybackend.dll" Name="qcertonlybackend.dll" KeyPath="yes" /></Component>
+      <Component Guid="{20000001-0001-0001-0001-000000000009}"><File Source="$(var.BuildDir)\tls\qschannelbackend.dll" Name="qschannelbackend.dll" KeyPath="yes" /></Component>
+    </ComponentGroup>
+
+    <ComponentGroup Id="NetworkInfo" Directory="NETWORKINFODIR">
+      <Component Guid="{20000001-0001-0001-0001-00000000000a}"><File Source="$(var.BuildDir)\networkinformation\qnetworklistmanager.dll" Name="qnetworklistmanager.dll" KeyPath="yes" /></Component>
+    </ComponentGroup>
+
+    <ComponentGroup Id="Generic" Directory="GENERICDIR">
+      <Component Guid="{20000001-0001-0001-0001-00000000000b}"><File Source="$(var.BuildDir)\generic\qtuiotouchplugin.dll" Name="qtuiotouchplugin.dll" KeyPath="yes" /></Component>
+    </ComponentGroup>
+
+    <!-- 鈻堚枅鈻?蹇嵎鏂瑰紡 鈻堚枅鈻?-->
+    <ComponentGroup Id="Shortcuts">
+      <Component Guid="{30000001-0001-0001-0001-000000000001}" Directory="ApplicationProgramsFolder">
+        <Shortcut Id="StartMenuShortcut" Name="AnyTXT Searcher"
+                  Target="[INSTALLDIR]anytxt-searcher.exe"
+                  WorkingDirectory="INSTALLDIR" IconIndex="0" />
+        <Shortcut Id="StartMenuUninstallShortcut" Name="Uninstall AnyTXT Searcher"
+                  Target="[System64Folder]msiexec.exe" Arguments="/x [ProductCode]" />
+        <RemoveFolder Id="RemoveApplicationProgramsFolder" On="uninstall" />
+        <RegistryValue Root="HKCU" Key="Software\Microsoft\AnyTXT Searcher\Installer"
+                       Name="StartMenu" Type="string" Value="" KeyPath="yes" />
+      </Component>
+
+      <Component Guid="{30000001-0001-0001-0001-000000000002}" Directory="DesktopFolder">
+        <Shortcut Id="DesktopShortcut" Name="AnyTXT Searcher"
+                  Target="[INSTALLDIR]anytxt-searcher.exe"
+                  WorkingDirectory="INSTALLDIR" IconIndex="0" />
+        <RegistryValue Root="HKCU" Key="Software\Microsoft\AnyTXT Searcher\Installer"
+                       Name="Desktop" Type="string" Value="" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+
+    <!-- 鈻堚枅鈻?娉ㄥ唽琛?鈻堚枅鈻?-->
+    <Component Id="RegistryEntries" Guid="{40000001-0001-0001-0001-000000000001}" Directory="INSTALLDIR">
+      <RegistryValue Root="HKLM" Key="Software\Microsoft\AnyTXT Searcher"
+                     Name="InstallDir" Type="string" Value="[INSTALLDIR]" KeyPath="yes" />
+      <RegistryValue Root="HKLM" Key="Software\Microsoft\AnyTXT Searcher"
+                     Name="Version" Type="string" Value="$(var.Version)" />
+    </Component>
+
+    <!-- 鈻堚枅鈻?UI 鈻堚枅鈻?-->
+    <UIRef Id="WixUI_Minimal" />
+    <UIRef Id="WixUI_ErrorProgressText" />
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLDIR" />
+
+    <Icon Id="app.ico" SourceFile="$(var.BuildDir)\anytxt-searcher.exe" />
+    <Property Id="ARPPRODUCTICON" Value="app.ico" />
+    <Property Id="ARPNOREPAIR" Value="yes" />
+  </Product>
+</Wix>
