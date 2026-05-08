@@ -128,8 +128,8 @@ QWidget* PreferencesDialog::createIndexTab()
     auto* indexForm = new QFormLayout(indexGroup);
 
     m_batchSizeSpin = new QSpinBox(w);
-    m_batchSizeSpin->setRange(10, 1000);
-    m_batchSizeSpin->setSingleStep(10);
+    m_batchSizeSpin->setRange(100, 10000);
+    m_batchSizeSpin->setSingleStep(100);
     m_batchSizeSpin->setSuffix(tr(" 条"));
     m_batchSizeSpin->setToolTip(tr("批量索引时每批处理的文档数，数值越大概率越快但内存占用更高"));
     indexForm->addRow(tr("批量大小:"), m_batchSizeSpin);
@@ -158,7 +158,7 @@ void PreferencesDialog::loadCurrentSettings()
         QString("background-color: %1; border: 1px solid #888; border-radius: 3px;")
             .arg(m_selectedColor.name()));
 
-    m_batchSizeSpin->setValue(settings.value("index/batchSize", 100).toInt());
+    m_batchSizeSpin->setValue(settings.value("index/batchSize", 1000).toInt());
     m_spellingCheck->setChecked(settings.value("index/enableSpelling", false).toBool());
 }
 

@@ -29,7 +29,7 @@ public:
     // ---- 数据库/索引核心设置 ----
     QString dbPath;              ///< Xapian 数据库的存储路径
     QString stemLanguage = "english"; ///< 词干提取语言（默认英语）
-    int batchSize = 100;         ///< 批量索引时的每批文档数
+    int batchSize = 1000;         ///< 批量索引时的每批文档数
     bool enableSpelling = false; ///< 是否启用拼写检查建议
 
     // ---- 智能索引设置 ----

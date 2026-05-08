@@ -98,6 +98,7 @@ private:
     ImportWorker* m_worker;
 
     int m_importedCount;
+    qint64 m_importStartTime = 0;
 };
 
 #endif // ANYTXT_IMPORT_DIALOG_H

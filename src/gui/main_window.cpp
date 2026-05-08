@@ -144,6 +144,12 @@ void MainWindow::setupToolBar()
 
     m_toolbar->addSeparator();
 
+    QAction* prefAction = addBtn(tr("偏好设置"));
+    connect(prefAction, &QAction::triggered, this, &MainWindow::onPreferences);
+
+    QAction* helpAction = addBtn(tr("使用手册"));
+    connect(helpAction, &QAction::triggered, this, &MainWindow::onHelp);
+
     QAction* aboutAction = addBtn(tr("关于"));
     connect(aboutAction, &QAction::triggered, this, &MainWindow::onAbout);
 

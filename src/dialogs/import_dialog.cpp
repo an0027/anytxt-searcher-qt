@@ -250,6 +250,7 @@ void ImportDialog::onStartImport()
     m_cancelBtn->setEnabled(true);
 
     m_progressBar->setValue(0);
+    m_importStartTime = QDateTime::currentSecsSinceEpoch();
 
     // Create worker and thread
     m_workerThread = new QThread(this);
@@ -298,8 +299,13 @@ void ImportDialog::onImportFinished(int imported, int failed, int skipped)
 {
     m_importedCount = imported;
     m_progressBar->setValue(100);
-    m_progressLabel->setText(tr("导入完成: %1 成功, %2 失败, %3 跳过")
-                                .arg(imported).arg(failed).arg(skipped));
+    qint64 elapsed = m_importStartTime > 0
+        ? QDateTime::currentSecsSinceEpoch() - m_importStartTime
+        : 0;
+    m_importStartTime = 0;
+    QString timeInfo = elapsed > 0 ? tr(" (用时 %1 秒)").arg(elapsed) : QString();
+    m_progressLabel->setText(tr("导入完成: %1 成功, %2 失败, %3 跳过%4")
+                                .arg(imported).arg(failed).arg(skipped).arg(timeInfo));
 
     // Re-enable UI
     m_selectFilesBtn->setEnabled(true);

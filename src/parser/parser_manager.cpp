@@ -7,6 +7,8 @@
 
 #include "parser/parser_manager.h"
 #include "parser/text_parser.h"
+#include "parser/eml_parser.h"
+#include "parser/rtf_parser.h"
 #include <QFileInfo>
 #include <QDebug>
 
@@ -16,6 +18,11 @@
 
 #ifdef HAS_LIBZIP
 #include "parser/docx_parser.h"
+#include "parser/xlsx_parser.h"
+#include "parser/pptx_parser.h"
+#include "parser/epub_parser.h"
+#include "parser/doc_parser.h"
+#include "parser/wps_parser.h"
 #endif
 
 #ifdef HAS_TESSERACT
@@ -36,6 +43,11 @@ ParserManager::ParserManager()
 
 #ifdef HAS_LIBZIP
     registerProcessor(std::make_shared<DocxParser>());
+    registerProcessor(std::make_shared<XlsxParser>());
+    registerProcessor(std::make_shared<PptxParser>());
+    registerProcessor(std::make_shared<EpubParser>());
+    registerProcessor(std::make_shared<DocParser>());
+    registerProcessor(std::make_shared<WpsParser>());
 #else
     qDebug() << "DocxParser disabled (HAS_LIBZIP not defined)";
 #endif

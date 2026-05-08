@@ -1,4 +1,3 @@
-// Must include xapian before Qt to avoid keyword clashes
 #include <xapian.h>
 #include "core/index_queue.h"
 #include "core/xapian_database.h"
@@ -7,216 +6,128 @@
 #include <QFileInfo>
 #include <QTimer>
 #include <QtConcurrent>
-#include <QDebug>
-
-// ====== IndexQueueWorker ======
-
-IndexQueueWorker::IndexQueueWorker(std::shared_ptr<XapianDatabase> db,
-                                   std::shared_ptr<XapianIndexer> indexer,
-                                   std::shared_ptr<ParserManager> parser)
-    : m_database(db), m_indexer(indexer), m_parser(parser)
-{
-}
-
-IndexQueueWorker::~IndexQueueWorker()
-{
-}
-
-bool IndexQueueWorker::indexFile(const QString& path)
-{
-    QFileInfo fi(path);
-    if (!fi.exists() || !fi.isReadable()) {
-        emit logMessage(QString("无法读取文件: %1").arg(path));
-        return false;
-    }
-
-    emit fileIndexed(path, false); // placeholder - will be updated
-    emit logMessage(QString("索引: %1").arg(fi.fileName()));
-
-    try {
-        auto result = m_parser->processDocument(path);
-        if (!result.success) {
-            emit logMessage(QString("解析失败: %1 - %2")
-                .arg(fi.fileName(), result.errorMessage));
-            return false;
-        }
-
-        QMap<QString, QString> meta = result.metadata;
-        int64_t docId = m_indexer->addDocument(path, meta, result.text);
-        Q_UNUSED(docId);
-
-        emit logMessage(QString("✓ 已完成: %1").arg(fi.fileName()));
-        return true;
-
-    } catch (const std::exception& e) {
-        emit logMessage(QString("✗ 索引失败: %1 - %2")
-            .arg(fi.fileName(), e.what()));
-        return false;
-    }
-}
-
-void IndexQueueWorker::process()
-{
-    // This is called from the thread - the actual queue management
-    // is done in the main thread. This worker handles one-shots.
-}
-
-// ====== IndexQueue ======
+#include <QThreadPool>
 
 IndexQueue::IndexQueue(std::shared_ptr<XapianDatabase> db,
                        std::shared_ptr<XapianIndexer> indexer,
-                       std::shared_ptr<ParserManager> parser,
-                       QObject* parent)
-    : QObject(parent),
-      m_database(db), m_indexer(indexer), m_parser(parser)
+                       std::shared_ptr<ParserManager> parser, QObject* parent)
+    : QObject(parent), m_database(db), m_indexer(indexer), m_parser(parser)
 {
-    m_workerThread = new QThread(this);
-    m_worker = new IndexQueueWorker(db, indexer, parser);
-    m_worker->moveToThread(m_workerThread);
-
-    connect(m_workerThread, &QThread::started, m_worker, &IndexQueueWorker::process);
-    connect(m_workerThread, &QThread::finished, m_worker, &QObject::deleteLater);
-    connect(m_worker, &IndexQueueWorker::logMessage, this, &IndexQueue::logMessage);
+    m_maxWorkers = qMax(2, QThread::idealThreadCount());
 }
 
-IndexQueue::~IndexQueue()
-{
-    stop();
-}
+IndexQueue::~IndexQueue() { stop(); }
 
 void IndexQueue::enqueue(const QString& filePath, int priority)
 {
-    QMutexLocker lock(&m_mutex);
-    m_queue.enqueue({filePath, priority});
+    QMutexLocker lock(&m_parseMutex);
+    m_parseQueue.enqueue({filePath, priority});
     m_totalQueued++;
 }
 
 void IndexQueue::enqueueBatch(const QStringList& filePaths, int priority)
 {
-    QMutexLocker lock(&m_mutex);
-    for (const auto& path : filePaths) {
-        m_queue.enqueue({path, priority});
-    }
-    m_totalQueued += filePaths.size();
-
-    if (!m_processing && !m_paused) {
-        processNext();
-    }
-}
-
-int IndexQueue::queueSize() const
-{
-    QMutexLocker lock(&m_mutex);
-    return m_queue.size();
-}
-
-bool IndexQueue::isProcessing() const
-{
-    return m_processing;
-}
-
-void IndexQueue::clear()
-{
-    QMutexLocker lock(&m_mutex);
-    m_queue.clear();
-}
-
-void IndexQueue::start()
-{
-    if (!m_workerThread->isRunning()) {
-        m_workerThread->start();
-    }
-    m_paused = false;
-    if (!m_queue.isEmpty() && !m_processing) {
-        processNext();
-    }
-}
-
-void IndexQueue::stop()
-{
-    if (m_workerThread->isRunning()) {
-        m_workerThread->quit();
-        m_workerThread->wait(3000);
-    }
-    m_processing = false;
-}
-
-void IndexQueue::pause()
-{
-    m_paused = true;
-}
-
-void IndexQueue::resume()
-{
-    m_paused = false;
-    if (!m_queue.isEmpty() && !m_processing) {
-        processNext();
-    }
-}
-
-void IndexQueue::processNext()
-{
-    QString filePath;
-    int currentIndexed, currentQueued;
     {
-        QMutexLocker lock(&m_mutex);
-        if (m_queue.isEmpty() || m_paused) {
-            if (m_queue.isEmpty()) {
-                m_processing = false;
-                emit queueEmpty();
-                emit queueFinished(m_totalIndexed, m_totalFailed);
-            }
-            return;
+        QMutexLocker lock(&m_parseMutex);
+        for (const auto& p : filePaths) { m_parseQueue.enqueue({p, priority}); }
+        m_totalQueued += filePaths.size();
+        if (!m_timingStarted) { m_parseTime.start(); m_writeTime.start(); m_timingStarted = true; }
+    }
+    dispatchNext();
+}
+
+int IndexQueue::queueSize() const { QMutexLocker lock(&m_parseMutex); return m_parseQueue.size(); }
+bool IndexQueue::isProcessing() const { QMutexLocker lock(&m_parseMutex); return m_activeParsers > 0 || !m_parseQueue.isEmpty() || m_writerRunning; }
+void IndexQueue::clear() { QMutexLocker lock(&m_parseMutex); m_parseQueue.clear(); }
+void IndexQueue::start() { m_paused = false; dispatchNext(); }
+void IndexQueue::stop() { m_stopped = true; m_writeCond.wakeAll(); QThreadPool::globalInstance()->waitForDone(8000); }
+void IndexQueue::pause() { m_paused = true; }
+void IndexQueue::resume() { m_paused = false; dispatchNext(); }
+
+bool IndexQueue::isWorkDone() { QMutexLocker lock(&m_parseMutex); return m_parseQueue.isEmpty() && m_activeParsers == 0; }
+
+void IndexQueue::dispatchNext()
+{
+    if (!m_writerRunning) { m_writerRunning = true; QtConcurrent::run([this]() { drainWriteQueue(); }); }
+    while (true) {
+        QString filePath;
+        {
+            QMutexLocker lock(&m_parseMutex);
+            if (m_stopped || m_paused || m_parseQueue.isEmpty()) return;
+            if (m_activeParsers >= m_maxWorkers) return;
+            filePath = m_parseQueue.dequeue().first;
+            m_activeParsers++;
         }
+        QFileInfo fi(filePath);
+        emit progressUpdated(m_totalIndexed + m_totalQueued - queueSize(), m_totalQueued, fi.fileName());
+        QtConcurrent::run([this, filePath]() { parseFile(filePath); });
+    }
+}
 
-        m_processing = true;
-        auto [fp, priority] = m_queue.dequeue();
-        Q_UNUSED(priority);
-        filePath = fp;
-        currentIndexed = m_totalIndexed;
-        currentQueued = m_totalQueued;
-    } // mutex released
-
-    QFileInfo fi(filePath);
-    emit progressUpdated(currentIndexed + 1, currentQueued, fi.fileName());
-
-    // Run parsing and indexing in background thread
-    auto db = m_database;
-    auto indexer = m_indexer;
-    auto parser = m_parser;
-    QtConcurrent::run([db, indexer, parser, filePath, this]() {
-        bool success = false;
-        try {
-            auto result = parser->processDocument(filePath);
-            if (result.success) {
-                indexer->addDocument(filePath, result.metadata, result.text);
-                success = true;
-            }
-        } catch (const std::exception& e) {
-            QMetaObject::invokeMethod(this, [this, filePath, e]() {
-                emit logMessage(QString("✗ 索引失败: %1 - %2")
-                    .arg(QFileInfo(filePath).fileName(), e.what()));
-            }, Qt::QueuedConnection);
+void IndexQueue::parseFile(const QString& filePath)
+{
+    IndexResult r;
+    r.filePath = filePath;
+    try {
+        auto res = m_parser->processDocument(filePath);
+        r.success = res.success;
+        r.text = res.text;
+        r.metadata = res.metadata;
+        r.errorMessage = res.errorMessage;
+    } catch (const std::exception& e) {
+        r.success = false;
+        r.errorMessage = QString::fromLatin1(e.what());
+    }
+    { QMutexLocker lock(&m_writeMutex); m_writeQueue.enqueue(r); m_writeCond.wakeOne(); }
+    QMetaObject::invokeMethod(this, [this, filePath, r]() {
+        QMutexLocker lock(&m_parseMutex);
+        m_activeParsers--;
+        emit fileProcessed(filePath, r.success);
+        if (m_parseQueue.isEmpty() && m_activeParsers == 0 && m_writeQueue.isEmpty() && !m_writerRunning) {
+            emit queueEmpty();
+            emit queueFinished(m_totalIndexed, m_totalFailed);
         }
+        dispatchNext();
+    }, Qt::QueuedConnection);
+}
 
-        // Update counters and emit completion on main thread
-        QMetaObject::invokeMethod(this, [this, filePath, success]() {
-            QMutexLocker lock(&m_mutex);
-            if (success) {
-                m_totalIndexed++;
-                emit logMessage(QString("✓ 索引完成: %1")
-                    .arg(QFileInfo(filePath).fileName()));
-            } else {
-                m_totalFailed++;
+void IndexQueue::drainWriteQueue()
+{
+    while (!m_stopped) {
+        IndexResult r;
+        bool hasWork = false;
+        {
+            QMutexLocker lock(&m_writeMutex);
+            if (!m_writeQueue.isEmpty()) { r = m_writeQueue.dequeue(); hasWork = true; }
+            else if (isWorkDone()) {
+                m_writerRunning = false;
+                try { if (m_indexer) m_indexer->flush(); } catch (...) {}
+                QMetaObject::invokeMethod(this, [this]() {
+                    QMutexLocker lock(&m_parseMutex);
+                    if (m_parseQueue.isEmpty() && m_activeParsers == 0) {
+                        emit queueEmpty();
+                        emit queueFinished(m_totalIndexed, m_totalFailed);
+                    }
+                }, Qt::QueuedConnection);
+                return;
+            } else { m_writeCond.wait(&m_writeMutex, 300); continue; }
+        }
+        if (hasWork) {
+            try {
+                if (r.success && m_indexer) m_indexer->addDocument(r.filePath, r.metadata, r.text);
+                QMetaObject::invokeMethod(this, [this, r]() {
+                    QMutexLocker lock(&m_parseMutex);
+                    if (r.success) { m_totalIndexed++; }
+                    else { m_totalFailed++; emit logMessage(QStringLiteral("x %1 - %2").arg(QFileInfo(r.filePath).fileName(), r.errorMessage)); }
+                }, Qt::QueuedConnection);
+            } catch (const std::exception& e) {
+                QMetaObject::invokeMethod(this, [this, fp = r.filePath, e]() {
+                    QMutexLocker lock(&m_parseMutex);
+                    m_totalFailed++;
+                    emit logMessage(QStringLiteral("x %1").arg(QFileInfo(fp).fileName()));
+                }, Qt::QueuedConnection);
             }
-            emit fileProcessed(filePath, success);
-            m_processing = false;
-            lock.unlock();
-
-            // Schedule next item
-            QTimer::singleShot(0, this, [this]() {
-                processNext();
-            });
-        }, Qt::QueuedConnection);
-    });
+        }
+    }
+    m_writerRunning = false;
 }
