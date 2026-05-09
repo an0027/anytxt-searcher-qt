@@ -8,15 +8,41 @@
 #include <QtConcurrent>
 #include <QThreadPool>
 
-IndexQueue::IndexQueue(std::shared_ptr<XapianDatabase> db,
-                       std::shared_ptr<XapianIndexer> indexer,
-                       std::shared_ptr<ParserManager> parser, QObject* parent)
-    : QObject(parent), m_database(db), m_indexer(indexer), m_parser(parser)
+IndexQueue::IndexQueue(
+    const QVector<std::shared_ptr<XapianDatabase>>& databases,
+    const QVector<std::shared_ptr<XapianIndexer>>& indexers,
+    std::shared_ptr<ParserManager> parser, QObject* parent)
+    : QObject(parent)
+    , m_databases(databases)
+    , m_indexers(indexers)
+    , m_parser(parser)
 {
+    m_shardCount = qMax(1, databases.size());
     m_maxWorkers = qMax(2, QThread::idealThreadCount());
+
+    // Initialize per-shard queues, mutexes, conditions
+    m_writeQueues.resize(m_shardCount);
+    m_writeMutexes.resize(m_shardCount);
+    m_writeConds.resize(m_shardCount);
+    m_writerRunning.resize(m_shardCount);
+    for (int i = 0; i < m_shardCount; ++i) {
+        m_writeMutexes[i] = new QMutex();
+        m_writeConds[i] = new QWaitCondition();
+        m_writerRunning[i] = false;
+    }
 }
 
-IndexQueue::~IndexQueue() { stop(); }
+IndexQueue::~IndexQueue()
+{
+    stop();
+    for (auto* m : m_writeMutexes) delete m;
+    for (auto* c : m_writeConds) delete c;
+}
+
+static int shardForPath(const QString& filePath, int shardCount)
+{
+    return qHash(filePath) % shardCount;
+}
 
 void IndexQueue::enqueue(const QString& filePath, int priority)
 {
@@ -36,19 +62,63 @@ void IndexQueue::enqueueBatch(const QStringList& filePaths, int priority)
     dispatchNext();
 }
 
-int IndexQueue::queueSize() const { QMutexLocker lock(&m_parseMutex); return m_parseQueue.size(); }
-bool IndexQueue::isProcessing() const { QMutexLocker lock(&m_parseMutex); return m_activeParsers > 0 || !m_parseQueue.isEmpty() || m_writerRunning; }
-void IndexQueue::clear() { QMutexLocker lock(&m_parseMutex); m_parseQueue.clear(); }
-void IndexQueue::start() { m_paused = false; dispatchNext(); }
-void IndexQueue::stop() { m_stopped = true; m_writeCond.wakeAll(); QThreadPool::globalInstance()->waitForDone(8000); }
+int IndexQueue::queueSize() const
+{
+    QMutexLocker lock(&m_parseMutex);
+    return m_parseQueue.size();
+}
+
+bool IndexQueue::isProcessing() const
+{
+    QMutexLocker lock(&m_parseMutex);
+    if (m_activeParsers > 0 || !m_parseQueue.isEmpty()) return true;
+    for (int i = 0; i < m_shardCount; ++i) {
+        if (m_writerRunning[i] || !m_writeQueues[i].isEmpty()) return true;
+    }
+    return false;
+}
+
+void IndexQueue::clear()
+{
+    QMutexLocker lock(&m_parseMutex);
+    m_parseQueue.clear();
+}
+
+void IndexQueue::start()
+{
+    m_paused = false;
+    dispatchNext();
+}
+
+void IndexQueue::stop()
+{
+    m_stopped = true;
+    for (int i = 0; i < m_shardCount; ++i) {
+        if (m_writeConds[i]) m_writeConds[i]->wakeAll();
+    }
+    QThreadPool::globalInstance()->waitForDone(8000);
+}
+
 void IndexQueue::pause() { m_paused = true; }
 void IndexQueue::resume() { m_paused = false; dispatchNext(); }
 
-bool IndexQueue::isWorkDone() { QMutexLocker lock(&m_parseMutex); return m_parseQueue.isEmpty() && m_activeParsers == 0; }
+bool IndexQueue::isWorkDone()
+{
+    QMutexLocker lock(&m_parseMutex);
+    return m_parseQueue.isEmpty() && m_activeParsers == 0;
+}
 
 void IndexQueue::dispatchNext()
 {
-    if (!m_writerRunning) { m_writerRunning = true; QtConcurrent::run([this]() { drainWriteQueue(); }); }
+    // Start writer threads for each shard (one thread per shard, runs until done)
+    for (int i = 0; i < m_shardCount; ++i) {
+        if (!m_writerRunning[i]) {
+            m_writerRunning[i] = true;
+            QtConcurrent::run([this, i]() { drainWriteQueue(i); });
+        }
+    }
+
+    // Dispatch parse tasks
     while (true) {
         QString filePath;
         {
@@ -59,7 +129,8 @@ void IndexQueue::dispatchNext()
             m_activeParsers++;
         }
         QFileInfo fi(filePath);
-        emit progressUpdated(m_totalIndexed + m_totalQueued - queueSize(), m_totalQueued, fi.fileName());
+        emit progressUpdated(m_totalIndexed + m_totalQueued - queueSize(),
+                             m_totalQueued, fi.fileName());
         QtConcurrent::run([this, filePath]() { parseFile(filePath); });
     }
 }
@@ -68,6 +139,8 @@ void IndexQueue::parseFile(const QString& filePath)
 {
     IndexResult r;
     r.filePath = filePath;
+    r.shardIndex = shardForPath(filePath, m_shardCount);
+
     try {
         auto res = m_parser->processDocument(filePath);
         r.success = res.success;
@@ -78,77 +151,89 @@ void IndexQueue::parseFile(const QString& filePath)
         r.success = false;
         r.errorMessage = QString::fromLatin1(e.what());
     }
-    { QMutexLocker lock(&m_writeMutex); m_writeQueue.enqueue(r); m_writeCond.wakeOne(); }
+
+    // Enqueue to the correct shard's write queue
+    {
+        QMutexLocker lock(m_writeMutexes[r.shardIndex]);
+        m_writeQueues[r.shardIndex].enqueue(r);
+        if (m_writeConds[r.shardIndex]) m_writeConds[r.shardIndex]->wakeOne();
+    }
+
     QMetaObject::invokeMethod(this, [this, filePath, r]() {
         QMutexLocker lock(&m_parseMutex);
         m_activeParsers--;
         emit fileProcessed(filePath, r.success);
-        if (m_parseQueue.isEmpty() && m_activeParsers == 0 && m_writeQueue.isEmpty() && !m_writerRunning) {
+
+        // Check if everything is done
+        bool allDone = m_parseQueue.isEmpty() && m_activeParsers == 0;
+        for (int i = 0; i < m_shardCount && allDone; ++i) {
+            allDone = allDone && m_writeQueues[i].isEmpty() && !m_writerRunning[i];
+        }
+        if (allDone) {
             emit queueEmpty();
             emit queueFinished(m_totalIndexed, m_totalFailed);
         }
+
         dispatchNext();
     }, Qt::QueuedConnection);
 }
 
-void IndexQueue::drainWriteQueue()
+void IndexQueue::drainWriteQueue(int shardIndex)
 {
-    const int batchSize = m_indexer ? m_indexer->batchSize() : 2000;
+    const int batchSize = (shardIndex < m_indexers.size() && m_indexers[shardIndex])
+                          ? m_indexers[shardIndex]->batchSize() : 2000;
+    auto& idxr = m_indexers[shardIndex];
     int docsInTxn = 0;
+
+    QQueue<IndexResult>& writeQueue = m_writeQueues[shardIndex];
+    QMutex* writeMutex = m_writeMutexes[shardIndex];
+    QWaitCondition* writeCond = m_writeConds[shardIndex];
 
     while (!m_stopped) {
         IndexResult r;
         bool hasWork = false;
         {
-            QMutexLocker lock(&m_writeMutex);
-            if (!m_writeQueue.isEmpty()) { r = m_writeQueue.dequeue(); hasWork = true; }
+            QMutexLocker lock(writeMutex);
+            if (!writeQueue.isEmpty()) { r = writeQueue.dequeue(); hasWork = true; }
             else if (isWorkDone()) {
-                // 提交最后一批事务
-                if (docsInTxn > 0 && m_indexer) {
-                    try { m_indexer->commitBatch(); } catch (...) {}
+                // Commit last batch
+                if (docsInTxn > 0 && idxr) {
+                    try { idxr->commitBatch(); } catch (...) {}
                 }
                 docsInTxn = 0;
-                m_writerRunning = false;
-                try { if (m_indexer) m_indexer->flush(); } catch (...) {}
-                QMetaObject::invokeMethod(this, [this]() {
-                    QMutexLocker lock(&m_parseMutex);
-                    if (m_parseQueue.isEmpty() && m_activeParsers == 0) {
-                        emit queueEmpty();
-                        emit queueFinished(m_totalIndexed, m_totalFailed);
-                    }
-                }, Qt::QueuedConnection);
+                m_writerRunning[shardIndex] = false;
+                if (idxr) { try { idxr->flush(); } catch (...) {} }
                 return;
             } else {
-                // 无超时等待，由 parseFile() 中的 wakeOne 唤醒
-                m_writeCond.wait(&m_writeMutex);
+                writeCond->wait(writeMutex);
                 continue;
             }
         }
+
         if (hasWork) {
             try {
-                if (r.success && m_indexer) {
-                    // 开始事务（首条文档）
-                    if (docsInTxn == 0) m_indexer->beginBatch();
-                    m_indexer->addDocument(r.filePath, r.metadata, r.text);
+                if (r.success && idxr) {
+                    if (docsInTxn == 0) idxr->beginBatch();
+                    idxr->addDocument(r.filePath, r.metadata, r.text);
                     docsInTxn++;
-                    // 达到批大小，提交事务
                     if (docsInTxn >= batchSize) {
-                        m_indexer->commitBatch();
+                        idxr->commitBatch();
                         docsInTxn = 0;
                     }
                 }
                 QMetaObject::invokeMethod(this, [this, r]() {
                     QMutexLocker lock(&m_parseMutex);
                     if (r.success) { m_totalIndexed++; }
-                    else { m_totalFailed++; emit logMessage(QStringLiteral("x %1 - %2").arg(QFileInfo(r.filePath).fileName(), r.errorMessage)); }
+                    else { m_totalFailed++;
+                        emit logMessage(QStringLiteral("x %1 - %2")
+                            .arg(QFileInfo(r.filePath).fileName(), r.errorMessage)); }
                 }, Qt::QueuedConnection);
             } catch (const std::exception& e) {
-                // 出错了也尝试提交，避免事务悬空
-                if (docsInTxn > 0 && m_indexer) {
-                    try { m_indexer->commitBatch(); } catch (...) {}
+                if (docsInTxn > 0 && idxr) {
+                    try { idxr->commitBatch(); } catch (...) {}
                     docsInTxn = 0;
                 }
-                QMetaObject::invokeMethod(this, [this, fp = r.filePath, e]() {
+                QMetaObject::invokeMethod(this, [this, fp = r.filePath]() {
                     QMutexLocker lock(&m_parseMutex);
                     m_totalFailed++;
                     emit logMessage(QStringLiteral("x %1").arg(QFileInfo(fp).fileName()));
@@ -157,9 +242,9 @@ void IndexQueue::drainWriteQueue()
         }
     }
 
-    // 停止时提交未完成的事务
-    if (docsInTxn > 0 && m_indexer) {
-        try { m_indexer->commitBatch(); } catch (...) {}
+    // Stopped: commit pending transaction
+    if (docsInTxn > 0 && idxr) {
+        try { idxr->commitBatch(); } catch (...) {}
     }
-    m_writerRunning = false;
+    m_writerRunning[shardIndex] = false;
 }

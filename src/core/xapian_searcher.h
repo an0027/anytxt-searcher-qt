@@ -5,6 +5,9 @@
 拼写纠错、相似文档推荐、规则引擎搜索等高级搜索功能。
 支持中文 CJK 分词、字段特定搜索、布尔操作符 (AND/OR/NOT)。
 排序方式：相关性、修改日期、文件大小。
+
+支持多分片搜索：多个 Xapian 数据库通过 Xapian::Database(shard0, shard1, ...)
+组合为一个逻辑数据库，搜索时自动合并去重。
  */
 
 #ifndef ANYTXT_XAPIAN_SEARCHER_H
@@ -25,7 +28,9 @@ class XapianDatabase;
 
 class XapianSearcher {
 public:
-    explicit XapianSearcher(std::shared_ptr<XapianDatabase> database);
+    explicit XapianSearcher(
+        const QVector<QString>& shardPaths,
+        const QVector<std::shared_ptr<XapianDatabase>>& databases = {});
     ~XapianSearcher();
 
     QPair<QVector<Document>, int> search(
@@ -51,11 +56,18 @@ public:
                                                 int offset = 0,
                                                 int limit = 100);
 
-private:
-    Xapian::Query buildFilterQuery(const QMap<QString, QString>& filters) const;
-    Document convertToDocument(const Xapian::Document& xdoc, Xapian::docid docId, double percent) const;
+    // Rebuild composite database (call after indexing)
+    void refresh();
 
-    std::shared_ptr<XapianDatabase> m_database;
+private:
+    Xapian::Database openCompositeDatabase() const;
+    Xapian::Query buildFilterQuery(const QMap<QString, QString>& filters) const;
+    Document convertToDocument(const Xapian::Document& xdoc,
+                                Xapian::docid docId,
+                                double percent) const;
+
+    QVector<QString> m_shardPaths;
+    QVector<std::shared_ptr<XapianDatabase>> m_databases;
     mutable QMutex m_mutex;
 };
 

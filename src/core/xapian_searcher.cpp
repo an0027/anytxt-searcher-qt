@@ -3,7 +3,8 @@
  *
  * 功能说明：封装 Xapian::Enquire 和 Xapian::QueryParser 进行文档搜索，
  * 支持全文搜索、拼写纠错、相似文档推荐、高级规则搜索、结果排序及过滤。
- * 使用 Xapian::Query(std::string()) 构造空查询以表示不限制匹配条件。
+ * 支持多分片搜索：通过 Xapian::Database(shard0, shard1, ...) 组合多个
+ * 分片数据库，搜索时自动合并去重。
  */
 
 #include "core/xapian_searcher.h"
@@ -22,13 +23,35 @@
 // 构造 / 析构
 // =====================================================================
 
-XapianSearcher::XapianSearcher(std::shared_ptr<XapianDatabase> database)
-    : m_database(std::move(database))
+XapianSearcher::XapianSearcher(
+    const QVector<QString>& shardPaths,
+    const QVector<std::shared_ptr<XapianDatabase>>& databases)
+    : m_shardPaths(shardPaths)
+    , m_databases(databases)
 {
 }
 
 XapianSearcher::~XapianSearcher()
 {
+}
+
+// =====================================================================
+// 打开组合数据库
+// =====================================================================
+
+// buildCompositeDb used below in all search methods
+
+// Helper to build composite database from N shards
+static Xapian::Database buildCompositeDb(const QVector<QString>& paths)
+{
+    if (paths.isEmpty()) {
+        throw SearchException("No database shards configured");
+    }
+    Xapian::Database db(paths[0].toStdString());
+    for (int i = 1; i < paths.size(); ++i) {
+        db.add_database(Xapian::Database(paths[i].toStdString()));
+    }
+    return db;
 }
 
 // =====================================================================
@@ -47,29 +70,21 @@ Xapian::Query XapianSearcher::buildFilterQuery(
         if (value.isEmpty()) continue;
 
         if (key == "mimeType") {
-            // 布尔词项 XTYPE{value}
             clauses.append(Xapian::Query("XTYPE" + value.toStdString()));
         } else if (key == "fileExt") {
-            // 布尔词项 XEXT{value}
             clauses.append(Xapian::Query("XEXT" + value.toStdString()));
         } else if (key == "filePath") {
-            // 布尔词项 XPATH{value}
             clauses.append(Xapian::Query("XPATH" + value.toStdString()));
         } else if (key == "title") {
-            // 标题域搜索（前缀 S）
             Xapian::QueryParser parser;
             parser.add_prefix("title", "S");
-            Xapian::Query q = parser.parse_query(value.toStdString(),
-                Xapian::QueryParser::FLAG_DEFAULT);
-            clauses.append(q);
+            clauses.append(parser.parse_query(value.toStdString(),
+                Xapian::QueryParser::FLAG_DEFAULT));
         } else if (key == "content") {
-            // 全文搜索（无前缀）
             Xapian::QueryParser parser;
-            Xapian::Query q = parser.parse_query(value.toStdString(),
-                Xapian::QueryParser::FLAG_DEFAULT);
-            clauses.append(q);
+            clauses.append(parser.parse_query(value.toStdString(),
+                Xapian::QueryParser::FLAG_DEFAULT));
         } else if (key == "sizeMin") {
-            // 值槽 1（文件大小）：>= value
             bool ok = false;
             int64_t sz = value.toLongLong(&ok);
             if (ok) {
@@ -78,7 +93,6 @@ Xapian::Query XapianSearcher::buildFilterQuery(
                 clauses.append(Xapian::Query(Xapian::Query::OP_VALUE_GE, 1, encoded));
             }
         } else if (key == "sizeMax") {
-            // 值槽 1（文件大小）：<= value
             bool ok = false;
             int64_t sz = value.toLongLong(&ok);
             if (ok) {
@@ -87,18 +101,15 @@ Xapian::Query XapianSearcher::buildFilterQuery(
                 clauses.append(Xapian::Query(Xapian::Query::OP_VALUE_LE, 1, encoded));
             }
         } else if (key == "dateMin") {
-            // 值槽 0（修改日期）：>= value (yyyyMMddHHmmss)
             clauses.append(Xapian::Query(
                 Xapian::Query::OP_VALUE_GE, 0, value.toStdString()));
         } else if (key == "dateMax") {
-            // 值槽 0（修改日期）：<= value
             clauses.append(Xapian::Query(
                 Xapian::Query::OP_VALUE_LE, 0, value.toStdString()));
         }
     }
 
     if (clauses.isEmpty()) {
-        // 无过滤条件时返回 MatchAll 等价查询
         return Xapian::Query(std::string());
     }
     if (clauses.size() == 1) {
@@ -118,9 +129,8 @@ Document XapianSearcher::convertToDocument(
     doc.docId     = static_cast<int64_t>(docId);
     doc.percent   = static_cast<int>(std::round(percent));
     doc.relevance = percent;
-    doc.rank      = 0; // 由调用者在排序后填入
+    doc.rank      = 0;
 
-    // 解析文档 data 字段中的 JSON
     std::string rawData = xdoc.get_data();
     QJsonDocument jdoc = QJsonDocument::fromJson(
         QByteArray::fromStdString(rawData));
@@ -129,7 +139,6 @@ Document XapianSearcher::convertToDocument(
         doc.filePath = obj.value("path").toString();
         doc.content  = obj.value("content").toString();
 
-        // 从 metadata 子对象中提取元数据
         QJsonObject meta = obj.value("metadata").toObject();
         doc.fileSize     = meta.value("fileSize").toString().toLongLong();
         doc.modifiedTime = meta.value("modifiedTime").toString().toLongLong();
@@ -138,12 +147,10 @@ Document XapianSearcher::convertToDocument(
         doc.fileName     = QFileInfo(doc.filePath).fileName();
         doc.title        = doc.fileName;
 
-        // 收集剩余元数据
         for (auto it = meta.constBegin(); it != meta.constEnd(); ++it) {
             doc.metadata[it.key()] = it.value().toString();
         }
     }
-
     return doc;
 }
 
@@ -162,25 +169,21 @@ QPair<QVector<Document>, int> XapianSearcher::search(
 {
     QMutexLocker locker(&m_mutex);
 
-    if (!m_database || !m_database->isOpen()) {
-        throw SearchException("Database is not open");
+    if (m_shardPaths.isEmpty()) {
+        throw SearchException("No database shards configured");
     }
 
-    Xapian::Database& db = m_database->getDatabase();
-
     try {
+        Xapian::Database db = buildCompositeDb(m_shardPaths);
+
         // --- 1. 解析查询 ---
         Xapian::QueryParser parser;
         parser.set_database(db);
         parser.set_stemmer(Xapian::Stem("english"));
         parser.set_stemming_strategy(Xapian::QueryParser::STEM_SOME);
 
-        // Set default operator based on match type
         if (matchType == "or") {
             parser.set_default_op(Xapian::Query::OP_OR);
-        } else if (matchType == "phrase") {
-            // Phrase mode: wrap entire query in quotes
-            // This is handled below
         } else {
             parser.set_default_op(Xapian::Query::OP_AND);
         }
@@ -204,20 +207,13 @@ QPair<QVector<Document>, int> XapianSearcher::search(
         if (qtrim.isEmpty()) {
             parsed = Xapian::Query(std::string());
         } else {
-            // Phrase mode: wrap entire query in quotes for exact phrase matching
             if (matchType == "phrase") {
                 qtrim = "\"" + qtrim + "\"";
             }
-
-            // Normalize operators: &→AND, |→OR, -→NOT (flexible spacing, multiple spaces collapsed)
-            // First collapse multiple spaces to single
             qtrim = qtrim.simplified();
-            // & and | with optional surrounding spaces
             qtrim.replace(QRegularExpression("\\s*&\\s*"), " AND ");
             qtrim.replace(QRegularExpression("\\s*\\|\\s*"), " OR ");
-            // - between words (with optional space before, at least one space after)
             qtrim.replace(QRegularExpression("\\s+-\\s+"), " NOT ");
-            // Recollapse multiple spaces from replacements
             qtrim = qtrim.simplified();
 
             parsed = parser.parse_query(qtrim.toStdString(), flags);
@@ -238,15 +234,11 @@ QPair<QVector<Document>, int> XapianSearcher::search(
         Xapian::Enquire enquire(db);
         enquire.set_query(finalQuery);
 
-        // 排序
         if (sortBy == "date" || sortBy == "modified") {
-            // 值槽 0：日期（yyyyMMddHHmmss），默认倒序（最新的在前）
             enquire.set_sort_by_value_then_relevance(0, !sortReverse);
         } else if (sortBy == "size") {
-            // 值槽 1：文件大小，默认倒序（最大的在前）
             enquire.set_sort_by_value_then_relevance(1, !sortReverse);
         } else {
-            // 默认按相关性排序
             enquire.set_sort_by_relevance();
         }
 
@@ -276,22 +268,29 @@ QPair<QVector<Document>, int> XapianSearcher::search(
 }
 
 // =====================================================================
-// 拼写建议
+// 刷新组合数据库
+// =====================================================================
+
+void XapianSearcher::refresh()
+{
+    QMutexLocker locker(&m_mutex);
+    for (auto& db : m_databases) {
+        if (db && db->isOpen()) db->refresh();
+    }
+}
+
+// =====================================================================
+// 其他搜索方法
 // =====================================================================
 
 QStringList XapianSearcher::suggestSpelling(const QString& query)
 {
     QMutexLocker locker(&m_mutex);
-
-    if (!m_database || !m_database->isOpen()) {
-        return {};
-    }
+    if (m_shardPaths.isEmpty()) return {};
 
     try {
-        Xapian::Database& db = m_database->getDatabase();
+        Xapian::Database db = buildCompositeDb(m_shardPaths);
         QStringList suggestions;
-
-        // 按空格拆分查询词，对每个词单独生成拼写建议
         QStringList terms = query.split(' ', Qt::SkipEmptyParts);
         for (const QString& term : terms) {
             std::string s = db.get_spelling_suggestion(term.toStdString(), 2);
@@ -299,7 +298,6 @@ QStringList XapianSearcher::suggestSpelling(const QString& query)
                 suggestions.append(QString::fromStdString(s));
             }
         }
-
         return suggestions;
     } catch (const Xapian::Error& e) {
         qWarning() << "Spelling suggestion failed:" << e.get_description().c_str();
@@ -307,167 +305,96 @@ QStringList XapianSearcher::suggestSpelling(const QString& query)
     }
 }
 
-// =====================================================================
-// 相似文档推荐
-// =====================================================================
-
 QVector<Document> XapianSearcher::getSimilarDocuments(
     int64_t docId, int maxResults)
 {
     QMutexLocker locker(&m_mutex);
-
-    if (!m_database || !m_database->isOpen()) {
-        throw SearchException("Database is not open");
-    }
-
-    Xapian::Database& db = m_database->getDatabase();
+    if (m_shardPaths.isEmpty()) throw SearchException("No database shards");
 
     try {
-        // 获取源文档
+        Xapian::Database db = buildCompositeDb(m_shardPaths);
         Xapian::Document sourceDoc = db.get_document(
             static_cast<Xapian::docid>(docId));
 
-        // 使用源文档的重要词项构造查询
-        Xapian::QueryParser parser;
-        parser.set_database(db);
-
-        // 收集文档中出现频率最高的词项
         QVector<Xapian::Query> termQueries;
         termQueries.reserve(64);
 
         Xapian::TermIterator termIt = sourceDoc.termlist_begin();
         Xapian::TermIterator termEnd = sourceDoc.termlist_end();
 
-        // 收集所有词项，排除内部布尔词项（以大写字母开头）
-        // 同时收集词频信息用于加权
         struct TermInfo {
             std::string term;
-            Xapian::termcount wdf; // within document frequency
+            Xapian::termcount wdf;
         };
         QVector<TermInfo> terms;
-        terms.reserve(128);
-
         for (; termIt != termEnd; ++termIt) {
             std::string tname = *termIt;
-            // 跳过布尔词项（以大写字母开头或含 X 前缀）
-            if (!tname.empty() && std::isupper(static_cast<unsigned char>(tname[0]))) {
-                continue;
+            if (!tname.empty() && !std::isupper(static_cast<unsigned char>(tname[0]))) {
+                terms.push_back({tname, termIt.get_wdf()});
             }
-            Xapian::termcount wdf = termIt.get_wdf();
-            terms.append({tname, wdf});
         }
 
-        if (terms.isEmpty()) {
-            return {};
-        }
+        if (terms.isEmpty()) return {};
 
-        // 按词频排序，取最重要的前 64 个词项
         std::sort(terms.begin(), terms.end(),
             [](const TermInfo& a, const TermInfo& b) {
                 return a.wdf > b.wdf;
             });
 
-        int take = std::min(64, static_cast<int>(terms.size()));
-        for (int i = 0; i < take; ++i) {
-            double weight = static_cast<double>(terms[i].wdf) / 10.0 + 1.0;
-            termQueries.append(Xapian::Query(terms[i].term, weight));
+        int maxTerms = qMin(static_cast<int>(terms.size()), 64);
+        for (int i = 0; i < maxTerms; ++i) {
+            termQueries.append(Xapian::Query(terms[i].term));
         }
 
-        if (termQueries.isEmpty()) {
-            return {};
-        }
-
-        Xapian::Query simQuery(
+        Xapian::Query similarQuery(
             Xapian::Query::OP_OR, termQueries.begin(), termQueries.end());
-
-        // 执行搜索（排除源文档自身）
         Xapian::Enquire enquire(db);
-        enquire.set_query(simQuery);
+        enquire.set_query(similarQuery);
 
-        // 请求多取一个（可能包含源文档，需要跳过）
-        int fetchCount = maxResults + 1;
-        Xapian::MSet mset = enquire.get_mset(0, fetchCount);
+        Xapian::MSet mset = enquire.get_mset(0, maxResults + 1); // +1 to skip source
 
         QVector<Document> results;
-        results.reserve(std::min(maxResults, static_cast<int>(mset.size())));
-
         for (auto it = mset.begin(); it != mset.end(); ++it) {
-            // 跳过源文档自身
-            if (static_cast<int64_t>(*it) == docId) {
-                continue;
-            }
-
-            Document doc = convertToDocument(it.get_document(),
-                                              *it,
-                                              it.get_percent());
+            if (static_cast<int64_t>(*it) == docId) continue; // skip source
+            Document doc = convertToDocument(it.get_document(), *it, it.get_percent());
             doc.rank = results.size();
             results.append(std::move(doc));
-
-            if (results.size() >= maxResults) {
-                break;
-            }
+            if (results.size() >= maxResults) break;
         }
-
         return results;
-
+    } catch (const Xapian::DocNotFoundError&) {
+        return {};
     } catch (const Xapian::Error& e) {
-        QString err = QString("getSimilarDocuments failed: %1")
-                        .arg(e.get_description().c_str());
-        qWarning() << err;
-        throw SearchException(err);
+        qWarning() << "getSimilarDocuments failed:" << e.get_description().c_str();
+        return {};
     }
 }
-
-// =====================================================================
-// 按文档 ID 获取
-// =====================================================================
 
 Document XapianSearcher::getDocumentById(int64_t docId)
 {
     QMutexLocker locker(&m_mutex);
-
-    if (!m_database || !m_database->isOpen()) {
-        throw SearchException("Database is not open");
-    }
-
-    Xapian::Database& db = m_database->getDatabase();
-
+    if (m_shardPaths.isEmpty()) return {};
     try {
+        Xapian::Database db = buildCompositeDb(m_shardPaths);
         Xapian::Document xdoc = db.get_document(
             static_cast<Xapian::docid>(docId));
         return convertToDocument(xdoc, static_cast<Xapian::docid>(docId), 100.0);
     } catch (const Xapian::DocNotFoundError&) {
-        Document empty;
-        empty.docId = -1;
-        return empty;
+        return {};
     } catch (const Xapian::Error& e) {
-        QString err = QString("getDocumentById failed: %1")
-                        .arg(e.get_description().c_str());
-        qWarning() << err;
-        throw SearchException(err);
+        qWarning() << "getDocumentById failed:" << e.get_description().c_str();
+        throw SearchException(QString::fromStdString(e.get_description()));
     }
 }
-
-// =====================================================================
-// 按路径获取
-// =====================================================================
 
 Document XapianSearcher::getDocumentByPath(const QString& path)
 {
     QMutexLocker locker(&m_mutex);
-
-    if (!m_database || !m_database->isOpen()) {
-        throw SearchException("Database is not open");
-    }
-
-    Xapian::Database& db = m_database->getDatabase();
-
+    if (m_shardPaths.isEmpty()) return {};
     try {
-        // 使用与索引器相同的唯一项格式："Q" + 绝对路径
+        Xapian::Database db = buildCompositeDb(m_shardPaths);
         QFileInfo fi(path);
         std::string uterm = ("Q" + fi.absoluteFilePath()).toStdString();
-
-        // 通过 postlist 查找文档
         auto it = db.postlist_begin(uterm);
         auto end = db.postlist_end(uterm);
         if (it == end) {
@@ -475,7 +402,6 @@ Document XapianSearcher::getDocumentByPath(const QString& path)
             empty.docId = -1;
             return empty;
         }
-
         Xapian::docid docId = *it;
         Xapian::Document xdoc = db.get_document(docId);
         return convertToDocument(xdoc, docId, 100.0);
@@ -484,24 +410,18 @@ Document XapianSearcher::getDocumentByPath(const QString& path)
         empty.docId = -1;
         return empty;
     } catch (const Xapian::Error& e) {
-        QString err = QString("getDocumentByPath failed: %1")
-                        .arg(e.get_description().c_str());
-        qWarning() << err;
-        throw SearchException(err);
+        qWarning() << "getDocumentByPath failed:" << e.get_description().c_str();
+        throw SearchException(QString::fromStdString(e.get_description()));
     }
 }
-
-// =====================================================================
-// 获取所有索引文档（文件浏览器用）
-// =====================================================================
 
 QVector<Document> XapianSearcher::getAllDocuments(int offset, int limit)
 {
     QMutexLocker locker(&m_mutex);
-    if (!m_database || !m_database->isOpen()) return {};
+    if (m_shardPaths.isEmpty()) return {};
 
     try {
-        Xapian::Database& db = m_database->getDatabase();
+        Xapian::Database db = buildCompositeDb(m_shardPaths);
         int total = static_cast<int>(db.get_doccount());
         if (total == 0) return {};
 
@@ -509,7 +429,6 @@ QVector<Document> XapianSearcher::getAllDocuments(int offset, int limit)
         if (limit < 0) limit = total;
         limit = qMin(limit, total - offset);
 
-        // Use MatchAll to enumerate documents
         Xapian::Enquire enquire(db);
         enquire.set_query(Xapian::Query(std::string()));
         Xapian::MSet mset = enquire.get_mset(offset, limit);
@@ -526,17 +445,11 @@ QVector<Document> XapianSearcher::getAllDocuments(int offset, int limit)
     }
 }
 
-// =====================================================================
-// 规则引擎搜索
-// =====================================================================
-
 QPair<QVector<Document>, int> XapianSearcher::searchByRule(
     const SearchRule& rule, int offset, int limit)
 {
     RuleEngine engine;
     QString queryStr = engine.parseRule(rule);
-
-    // 从规则中提取过滤器条件（文件类型、扩展名、大小、日期等）
     QMap<QString, QString> filters;
 
     for (const auto& cond : rule.conditions()) {
@@ -572,6 +485,5 @@ QPair<QVector<Document>, int> XapianSearcher::searchByRule(
                 break;
         }
     }
-
     return search(queryStr, offset, limit, filters, "relevance", false);
 }

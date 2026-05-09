@@ -30,6 +30,7 @@ public:
     QString dbPath;              ///< Xapian 数据库的存储路径
     QString stemLanguage = "english"; ///< 词干提取语言（默认英语）
     int batchSize = 1000;         ///< 批量索引时的每批文档数
+    int shardCount = 4;           ///< 索引分片数（多分片并行写入提升吞吐）
     bool enableSpelling = false; ///< 是否启用拼写检查建议
 
     // ---- 智能索引设置 ----

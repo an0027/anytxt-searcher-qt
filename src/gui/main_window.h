@@ -104,8 +104,11 @@ private:
     ExportDialog* m_exportDialog = nullptr;
 
     std::shared_ptr<IndexConfig> m_config;
-    std::shared_ptr<XapianDatabase> m_database;
-    std::shared_ptr<XapianIndexer> m_indexer;
+    // Multi-shard: vector of databases and indexers
+    QVector<std::shared_ptr<XapianDatabase>> m_databases;
+    QVector<std::shared_ptr<XapianIndexer>> m_indexers;
+    // Writable database paths for the searcher (one per shard)
+    QStringList m_shardPaths;
     std::shared_ptr<XapianSearcher> m_searcher;
     std::shared_ptr<ParserManager> m_processorManager;
     std::shared_ptr<FileWatcher> m_fileWatcher;

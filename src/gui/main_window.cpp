@@ -63,12 +63,24 @@ MainWindow::MainWindow(const QString& indexPath, QWidget* parent)
     if (!indexPath.isEmpty()) {
         m_config->dbPath = indexPath;
     }
-    m_database = std::make_shared<XapianDatabase>();
-    m_indexer = std::make_shared<XapianIndexer>(m_database);
-    m_searcher = std::make_shared<XapianSearcher>(m_database);
+
+    // Create multi-shard databases and indexers
+    // (actual DB open happens in initializeIndex())
+    const int shardCount = m_config->shardCount;
+    m_shardPaths.clear();
+    m_databases.resize(shardCount);
+    m_indexers.resize(shardCount);
+    for (int i = 0; i < shardCount; ++i) {
+        m_databases[i] = std::make_shared<XapianDatabase>();
+        // Indexer created after database is opened
+    }
+    // Searcher and IndexQueue are created after initializeIndex()
+    // when databases are open and paths are known
+    m_searcher = nullptr;
+    m_indexQueue = nullptr;
+
     m_processorManager = std::make_shared<ParserManager>();
     m_fileWatcher = std::make_shared<FileWatcher>(this);
-    m_indexQueue = std::make_shared<IndexQueue>(m_database, m_indexer, m_processorManager, this);
 
     // Setup UI
     setupToolBar();
@@ -91,7 +103,10 @@ MainWindow::MainWindow(const QString& indexPath, QWidget* parent)
 
 MainWindow::~MainWindow()
 {
-    if (m_indexer) m_indexer->flush();
+    // Flush all shards
+    for (auto& idxr : m_indexers) {
+        if (idxr) try { idxr->flush(); } catch (...) {}
+    }
     saveSettings();
     if (m_searchWatcher->isRunning()) {
         m_searchWatcher->cancel();
@@ -324,18 +339,45 @@ void MainWindow::initializeIndex()
 {
     try {
         m_config->ensureDatabaseDirectory();
-        bool newDb = !QDir(m_config->dbPath).exists("postlist.baseB") &&
-                     !QDir(m_config->dbPath).exists("postlist.baseA");
-        if (newDb) {
-            m_database->create(m_config->dbPath);
-        } else {
-            m_database->open(m_config->dbPath, true);
+        const int shardCount = m_config->shardCount;
+        QString basePath = m_config->dbPath;
+
+        // Create or open each shard
+        m_shardPaths.clear();
+        m_indexers.clear();
+        m_indexers.resize(shardCount);
+
+        for (int i = 0; i < shardCount; ++i) {
+            QString shardPath = QStringLiteral("%1/shard_%2").arg(basePath).arg(i);
+            m_shardPaths.append(shardPath);
+
+            bool newDb = !QDir(shardPath).exists("postlist.baseB") &&
+                         !QDir(shardPath).exists("postlist.baseA");
+            if (newDb) {
+                m_databases[i]->create(shardPath);
+            } else {
+                m_databases[i]->open(shardPath, true);
+            }
+
+            m_indexers[i] = std::make_shared<XapianIndexer>(m_databases[i]);
+            m_indexers[i]->setStemLanguage(m_config->stemLanguage);
+            m_indexers[i]->setEnableSpelling(m_config->enableSpelling);
+            m_indexers[i]->setBatchSize(m_config->batchSize);
         }
+
+        // Create searcher and index queue with all shards
+        m_searcher = std::make_shared<XapianSearcher>(m_shardPaths, m_databases);
+        m_indexQueue = std::make_shared<IndexQueue>(
+            m_databases, m_indexers, m_processorManager, this);
+
+        // Connect index queue signals
+        connect(m_indexQueue.get(), &IndexQueue::progressUpdated,
+                this, &MainWindow::onQueueProgress);
+        connect(m_indexQueue.get(), &IndexQueue::queueFinished,
+                this, &MainWindow::onQueueFinished);
+
         m_lastIndexTime = QDateTime::currentSecsSinceEpoch();
         updateIndexStatus();
-        m_indexer->setStemLanguage(m_config->stemLanguage);
-        m_indexer->setEnableSpelling(m_config->enableSpelling);
-        m_indexer->setBatchSize(m_config->batchSize);
         statusBar()->showMessage(tr("索引已就绪"), 3000);
     } catch (const DatabaseError& e) {
         qWarning() << "Index init failed:" << e.what();
@@ -349,7 +391,9 @@ void MainWindow::updateIndexStatus()
 {
     int docCount = 0;
     try {
-        if (m_database && m_database->isOpen()) docCount = m_database->getDocumentCount();
+        for (auto& db : m_databases) {
+            if (db && db->isOpen()) docCount += db->getDocumentCount();
+        }
     } catch (...) {}
     QString status = tr("索引: %1 文档").arg(docCount);
     if (m_lastIndexTime > 0) {
@@ -405,7 +449,9 @@ void MainWindow::performSearch()
             QPair<QVector<Document>, int> result;
             {
                 QMutexLocker locker(&m_searchMutex);
-                if (m_indexer) m_indexer->flush();
+                for (auto& idxr : m_indexers) {
+                    if (idxr) try { idxr->flush(); } catch (...) {}
+                }
                 result = m_searcher->search(query, offset, limit, filters, sortBy, sortReverse, matchType);
             }
             // Filter excluded paths
@@ -534,7 +580,10 @@ void MainWindow::onCopyPath(const QString& path)
 void MainWindow::onImportRequested()
 {
     if (!m_importDialog) {
-        m_importDialog = new ImportDialog(m_database, m_indexer, m_processorManager, this);
+        // Use first shard for import dialog (single-shard is sufficient)
+        auto db0 = m_databases.isEmpty() ? nullptr : m_databases[0];
+        auto idx0 = m_indexers.isEmpty() ? nullptr : m_indexers[0];
+        m_importDialog = new ImportDialog(db0, idx0, m_processorManager, this);
     }
     m_importDialog->exec();
     int imported = m_importDialog->importedCount();
@@ -616,7 +665,9 @@ void MainWindow::onReindex()
 {
     if (QMessageBox::question(this, tr("重建索引"), tr("确定要重建吗？")) == QMessageBox::Yes) {
         try {
-            m_indexer->clearIndex();
+            for (auto& idxr : m_indexers) {
+                if (idxr) try { idxr->clearIndex(); } catch (...) {}
+            }
             refreshFileList();
             updateIndexStatus();
         } catch (const std::exception& e) {
@@ -628,7 +679,9 @@ void MainWindow::onReindex()
 void MainWindow::onOptimize()
 {
     try {
-        m_indexer->optimize();
+        for (auto& idxr : m_indexers) {
+            if (idxr) try { idxr->optimize(); } catch (...) {}
+        }
         statusBar()->showMessage(tr("索引优化完成"), 3000);
     } catch (const std::exception& e) {
         QMessageBox::critical(this, tr("错误"), tr("%1").arg(e.what()));
@@ -742,9 +795,11 @@ void MainWindow::onPreferences()
         // Apply index settings
         m_config->batchSize = dialog.batchSize();
         m_config->enableSpelling = dialog.enableSpelling();
-        if (m_indexer) {
-            m_indexer->setBatchSize(m_config->batchSize);
-            m_indexer->setEnableSpelling(m_config->enableSpelling);
+        for (auto& idxr : m_indexers) {
+            if (idxr) {
+                idxr->setBatchSize(m_config->batchSize);
+                idxr->setEnableSpelling(m_config->enableSpelling);
+            }
         }
         m_config->save();
 
@@ -795,8 +850,11 @@ void MainWindow::onFilesChanged(const QStringList& newFiles, const QStringList& 
     }
     if (!deduped.isEmpty()) m_indexQueue->enqueueBatch(deduped);
     for (const auto& path : deletedFiles) {
-        try { m_indexer->deleteDocument(path); }
-        catch (const std::exception& e) { qWarning() << "Delete failed:" << e.what(); }
+        int shard = qHash(path) % m_indexers.size();
+        if (shard < m_indexers.size() && m_indexers[shard]) {
+            try { m_indexers[shard]->deleteDocument(path); }
+            catch (const std::exception& e) { qWarning() << "Delete failed:" << e.what(); }
+        }
     }
     if (!m_indexQueue->isProcessing() && !deduped.isEmpty()) m_indexQueue->start();
 }
@@ -832,7 +890,10 @@ void MainWindow::onQueueFinished(int indexed, int failed)
             m_notificationManager->notifyIndexComplete(indexed, failed, elapsed);
         }
     }
-    if (m_database && m_database->isOpen()) m_database->refresh();
+    for (auto& db : m_databases) {
+        if (db && db->isOpen()) db->refresh();
+    }
+    if (m_searcher) m_searcher->refresh();
 }
 
 void MainWindow::setupTrayIcon()
