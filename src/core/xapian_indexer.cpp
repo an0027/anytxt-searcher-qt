@@ -202,13 +202,9 @@ int64_t XapianIndexer::addDocument(const QString& filePath,
             termgen.set_document(doc);
         }
 
-        // 批量提交：每 batchSize 个文档或调用 flush() 时写入
+        // 提交由外部事务控制（见 beginBatch() / commitBatch()）
+        // 不在内部自动 commit，由调用方管理批量
         m_docsSinceFlush++;
-        if (m_docsSinceFlush >= m_batchSize) {
-            wdb.commit();
-            m_database->refresh();
-            m_docsSinceFlush = 0;
-        }
         int64_t docId = static_cast<int64_t>(replacedDocId);
 
         return docId;
@@ -364,6 +360,28 @@ void XapianIndexer::clearIndex()
         qDebug() << "Cleared" << count << "documents from index";
     } catch (const Xapian::Error& e) {
         qWarning() << "Failed to clear index:" << e.get_description().c_str();
+    }
+}
+
+void XapianIndexer::beginBatch()
+{
+    QMutexLocker locker(&m_mutex);
+    if (!m_database || !m_database->isOpen()) return;
+    auto& wdb = m_database->getWritableDatabase();
+    wdb.begin_transaction();
+}
+
+void XapianIndexer::commitBatch()
+{
+    QMutexLocker locker(&m_mutex);
+    if (!m_database || !m_database->isOpen()) return;
+    try {
+        auto& wdb = m_database->getWritableDatabase();
+        wdb.commit_transaction();
+        m_database->refresh();
+        m_docsSinceFlush = 0;
+    } catch (const Xapian::Error& e) {
+        qWarning() << "Batch commit failed:" << e.get_description().c_str();
     }
 }
 

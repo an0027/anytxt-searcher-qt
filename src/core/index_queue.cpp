@@ -93,6 +93,9 @@ void IndexQueue::parseFile(const QString& filePath)
 
 void IndexQueue::drainWriteQueue()
 {
+    const int batchSize = m_indexer ? m_indexer->batchSize() : 2000;
+    int docsInTxn = 0;
+
     while (!m_stopped) {
         IndexResult r;
         bool hasWork = false;
@@ -100,6 +103,11 @@ void IndexQueue::drainWriteQueue()
             QMutexLocker lock(&m_writeMutex);
             if (!m_writeQueue.isEmpty()) { r = m_writeQueue.dequeue(); hasWork = true; }
             else if (isWorkDone()) {
+                // 提交最后一批事务
+                if (docsInTxn > 0 && m_indexer) {
+                    try { m_indexer->commitBatch(); } catch (...) {}
+                }
+                docsInTxn = 0;
                 m_writerRunning = false;
                 try { if (m_indexer) m_indexer->flush(); } catch (...) {}
                 QMetaObject::invokeMethod(this, [this]() {
@@ -110,17 +118,36 @@ void IndexQueue::drainWriteQueue()
                     }
                 }, Qt::QueuedConnection);
                 return;
-            } else { m_writeCond.wait(&m_writeMutex, 300); continue; }
+            } else {
+                // 无超时等待，由 parseFile() 中的 wakeOne 唤醒
+                m_writeCond.wait(&m_writeMutex);
+                continue;
+            }
         }
         if (hasWork) {
             try {
-                if (r.success && m_indexer) m_indexer->addDocument(r.filePath, r.metadata, r.text);
+                if (r.success && m_indexer) {
+                    // 开始事务（首条文档）
+                    if (docsInTxn == 0) m_indexer->beginBatch();
+                    m_indexer->addDocument(r.filePath, r.metadata, r.text);
+                    docsInTxn++;
+                    // 达到批大小，提交事务
+                    if (docsInTxn >= batchSize) {
+                        m_indexer->commitBatch();
+                        docsInTxn = 0;
+                    }
+                }
                 QMetaObject::invokeMethod(this, [this, r]() {
                     QMutexLocker lock(&m_parseMutex);
                     if (r.success) { m_totalIndexed++; }
                     else { m_totalFailed++; emit logMessage(QStringLiteral("x %1 - %2").arg(QFileInfo(r.filePath).fileName(), r.errorMessage)); }
                 }, Qt::QueuedConnection);
             } catch (const std::exception& e) {
+                // 出错了也尝试提交，避免事务悬空
+                if (docsInTxn > 0 && m_indexer) {
+                    try { m_indexer->commitBatch(); } catch (...) {}
+                    docsInTxn = 0;
+                }
                 QMetaObject::invokeMethod(this, [this, fp = r.filePath, e]() {
                     QMutexLocker lock(&m_parseMutex);
                     m_totalFailed++;
@@ -128,6 +155,11 @@ void IndexQueue::drainWriteQueue()
                 }, Qt::QueuedConnection);
             }
         }
+    }
+
+    // 停止时提交未完成的事务
+    if (docsInTxn > 0 && m_indexer) {
+        try { m_indexer->commitBatch(); } catch (...) {}
     }
     m_writerRunning = false;
 }

@@ -47,6 +47,22 @@ public:
                         const QString& content);
 
     /**
+     * @brief 开始批量事务
+     *
+     * 开始一个 Xapian 事务，后续 addDocument 调用暂不刷盘，
+     * 直到 commitBatch() 或 commit_transaction() 调用。
+     * 事务内禁止自动 commit，确保批量写入原子性。
+     */
+    void beginBatch();
+
+    /**
+     * @brief 提交批量事务
+     *
+     * 提交事务并刷盘。事务提交后新索引数据才可被搜索。
+     */
+    void commitBatch();
+
+    /**
      * @brief 批量添加文档到索引
      * @param paths 文件路径列表
      * @return 成功索引的文档 ID 向量
@@ -179,7 +195,7 @@ private:
     std::shared_ptr<XapianDatabase> m_database; ///< 共享的 Xapian 数据库对象
     QString m_stemLanguage = "english";         ///< 词干提取语言
     bool m_enableSpelling = false;              ///< 是否启用拼写检查
-    int m_batchSize = 100;                      ///< 批量索引批大小
+    int m_batchSize = 2000;                     ///< 批量索引批大小
     int m_docsSinceFlush = 0;                   ///< 自上次提交以来的文档数
     mutable QMutex m_mutex;                     ///< 线程安全互斥锁
 };
